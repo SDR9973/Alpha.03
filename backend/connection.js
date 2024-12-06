@@ -13,8 +13,8 @@ async function run() {
         console.log("Connected successfully to MongoDB");
 
         // Further operations
-        const database = client.db('your_db_name');
-        const collection = database.collection('your_collection_name');
+        const database = client.db('netXplore');
+        const collection = database.collection('researcher');
 
         // Query for a document
         const doc = await collection.findOne({});
