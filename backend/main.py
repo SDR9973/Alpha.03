@@ -10,8 +10,6 @@ import os
 load_dotenv()
 app = FastAPI()
 print("API RUNNING")
-# Database Connection
-client = AsyncIOMotorClient(os.getenv("DB_CONNECTION"))
 researchers = db["researcher"]  # Access the 'researcher' collection
 
 print
