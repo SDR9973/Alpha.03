@@ -79,3 +79,70 @@ dist/
 
 # Serverless directories
 .serverless/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# macOS files
+.DS_Store
+
+# Pytest cache
+.pytest_cache/
+
+# Logs and debug files
+*.log
+
+# Environment variables and secrets
+.env
+.env.*
+
+# IDE-specific files
+.vscode/
+.idea/
+
+# Local development files
+*.sqlite3
+*.db
+*.swp
+*.swo
+
+# Compiled static files
+staticfiles/
+
+# Migrations
+migrations/
+
+# Cache files
+*.egg-info/
+.eggs/
+*.cache
+*.mo
+*.pot
+
+# Testing coverage reports
+htmlcov/
+.coverage
+.coverage.*
+.cache
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Build artifacts
+dist/
+build/
+*.egg
+*.tar.gz
+*.whl
+
+# Uvicorn or Gunicorn logs
+gunicorn*.log
+uvicorn*.log
