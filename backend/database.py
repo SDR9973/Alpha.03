@@ -10,5 +10,5 @@ db_connection_string = os.getenv("DB_CONNECTION")
 
 # Create a client and connect to the database
 client = AsyncIOMotorClient(db_connection_string)
-db = client["research_db"]  # Replace with your database name
-researchers = db["researcher"]  # The collection is 'researcher'
+db = client["netXplore"]  # Access the 'netXplore' database
+#researchers = db["researcher"]  # Access the 'researcher' collection
