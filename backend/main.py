@@ -12,7 +12,7 @@ app = FastAPI()
 print("API RUNNING")
 researchers = db["researcher"]  # Access the 'researcher' collection
 
-print
+
 # Pydantic Models
 class ResearcherCreate(BaseModel):
     name: str
