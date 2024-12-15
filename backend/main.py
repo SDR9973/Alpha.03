@@ -2,11 +2,16 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, EmailStr
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
+from dotenv import load_dotenv
+import os
 
+# Load environment variables
+load_dotenv()
 app = FastAPI()
 
 # Database Connection
-client = AsyncIOMotorClient("mongodb+srv://netxplore2024:3fpSZdcM9d9VmE3d@clusternet.3vkfl.mongodb.net/?retryWrites=true&w=majority&appName=ClusterNet")
+client = AsyncIOMotorClient(os.getenv("DB_CONNECTION"))
+#client = AsyncIOMotorClient("mongodb+srv://netxplore2024:3fpSZdcM9d9VmE3d@clusternet.3vkfl.mongodb.net/?retryWrites=true&w=majority&appName=ClusterNet")
 db = client["netXplore"]  # Access the 'netXplore' database
 researchers = db["researcher"]  # Access the 'researcher' collection
 
