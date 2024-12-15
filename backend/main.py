@@ -8,7 +8,7 @@ import os
 # Load environment variables
 load_dotenv()
 app = FastAPI()
-
+print("API RUNNING")
 # Database Connection
 client = AsyncIOMotorClient(os.getenv("DB_CONNECTION"))
 #client = AsyncIOMotorClient("mongodb+srv://netxplore2024:3fpSZdcM9d9VmE3d@clusternet.3vkfl.mongodb.net/?retryWrites=true&w=majority&appName=ClusterNet")
