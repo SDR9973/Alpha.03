@@ -1,235 +1,39 @@
-
-// import React, { useState } from 'react';
-// import { Form, Button, Alert } from 'react-bootstrap';
-
-// const UploadWhatsAppFile = () => {
-//   const [file, setFile] = useState(null);
-//   const [message, setMessage] = useState('');
-//   const [uploadedFile, setUploadedFile] = useState(''); // סטייט לשם הקובץ
-
-//   const handleFileChange = (event) => {
-//     setFile(event.target.files[0]);
-//     setMessage('');
-//     setUploadedFile('');
-//   };
-
-//   const handleSubmit = (event) => {
-//     event.preventDefault();
-
-//     if (!file) {
-//       setMessage('Please select a file before uploading.');
-//       return;
-//     }
-
-//     const formData = new FormData();
-//     formData.append('file', file);
-
-//     fetch('http://localhost:8000/upload', {
-//       method: 'POST',
-//       body: formData,
-//     })
-//       .then((response) => response.json())
-//       .then((data) => {
-//         if (data.message) {
-//           setMessage(data.message);
-//           setUploadedFile(data.filename); // שמירת שם הקובץ שהועלה
-//         }
-//       })
-//       .catch(() => setMessage('An error occurred during the upload.'));
-//   };
-
-//   const handleDelete = () => {
-//     fetch(`http://localhost:8000/delete/${uploadedFile}`, { method: 'DELETE' })
-//       .then((response) => response.json())
-//       .then((data) => {
-//         setMessage(data.message || 'File deleted successfully!');
-//         setUploadedFile(''); // איפוס שם הקובץ
-//       })
-//       .catch(() => setMessage('An error occurred during the delete operation.'));
-//   };
-
-//   return (
-//     <div className="container mt-5">
-//       <h2>Upload WhatsApp Chat File</h2>
-//       {message && <Alert variant={message.includes('successfully') ? 'success' : 'danger'}>{message}</Alert>}
-//       <Form onSubmit={handleSubmit}>
-//         <Form.Group controlId="formFile" className="mb-3">
-//           <Form.Label>Select WhatsApp Chat File</Form.Label>
-//           <Form.Control type="file" accept=".txt" onChange={handleFileChange} />
-//         </Form.Group>
-//         <Button variant="primary" type="submit">
-//           Upload
-//         </Button>
-//       </Form>
-//       {uploadedFile && (
-//         <div className="mt-3">
-//           <p>Uploaded File: {uploadedFile}</p>
-//           <Button variant="danger" onClick={handleDelete}>
-//             Delete File
-//           </Button>
-//         </div>
-//       )}
-//     </div>
-//   );
-// };
-
-// export default UploadWhatsAppFile;
-
-
-// ...................................................................................
-
-// import React, { useState } from 'react';
-// import { Form, Button, Alert } from 'react-bootstrap';
-// import { Bar } from 'react-chartjs-2';
-
-// const UploadWhatsAppFile = () => {
-//   const [file, setFile] = useState(null);
-//   const [message, setMessage] = useState('');
-//   const [uploadedFile, setUploadedFile] = useState('');
-//   const [chartData, setChartData] = useState(null);
-
-//   // בחירת קובץ
-//   const handleFileChange = (event) => {
-//     setFile(event.target.files[0]);
-//     setMessage('');
-//     setUploadedFile('');
-//     setChartData(null);
-//   };
-
-//   // העלאת קובץ
-//   const handleSubmit = (event) => {
-//     event.preventDefault();
-//     if (!file) {
-//       setMessage('Please select a file before uploading.');
-//       return;
-//     }
-
-//     const formData = new FormData();
-//     formData.append('file', file);
-
-//     fetch('http://localhost:8000/upload', {
-//       method: 'POST',
-//       body: formData,
-//     })
-//       .then((response) => response.json())
-//       .then((data) => {
-//         if (data.message) {
-//           setMessage(data.message);
-//           setUploadedFile(data.filename);
-//         }
-//       })
-//       .catch(() => setMessage('An error occurred during the upload.'));
-//   };
-
-//   // מחיקת קובץ
-//   const handleDelete = () => {
-//     fetch(`http://localhost:8000/delete/${uploadedFile}`, { method: 'DELETE' })
-//       .then((response) => response.json())
-//       .then((data) => {
-//         setMessage(data.message || 'File deleted successfully!');
-//         setUploadedFile('');
-//         setChartData(null);
-//       })
-//       .catch(() => setMessage('An error occurred during the delete operation.'));
-//   };
-
-//   // ניתוח הקובץ
-//   const handleAnalysis = () => {
-//     fetch(`http://localhost:8000/analyze/${uploadedFile}`)
-//       .then((response) => response.json())
-//       .then((data) => {
-//         if (data.analysis) {
-//           const labels = Object.keys(data.analysis).slice(0, 10);
-//           const counts = Object.values(data.analysis).slice(0, 10);
-//           setChartData({
-//             labels,
-//             datasets: [
-//               {
-//                 label: 'Word Frequency',
-//                 data: counts,
-//                 backgroundColor: 'rgba(75,192,192,0.6)',
-//               },
-//             ],
-//           });
-//         }
-//       })
-//       .catch(() => setMessage('An error occurred during analysis.'));
-//   };
-
-//   return (
-//     <div className="container mt-5">
-//       <h2>Upload WhatsApp Chat File</h2>
-//       {message && <Alert variant={message.includes('successfully') ? 'success' : 'danger'}>{message}</Alert>}
-//       <Form onSubmit={handleSubmit}>
-//         <Form.Group controlId="formFile" className="mb-3">
-//           <Form.Label>Select WhatsApp Chat File</Form.Label>
-//           <Form.Control type="file" accept=".txt" onChange={handleFileChange} />
-//         </Form.Group>
-//         <Button variant="primary" type="submit">
-//           Upload
-//         </Button>
-//       </Form>
-
-//       {uploadedFile && (
-//         <div className="mt-3">
-//           <p>Uploaded File: {uploadedFile}</p>
-//           <div className="d-flex gap-3">
-//             <Button variant="danger" onClick={handleDelete}>
-//               Delete File
-//             </Button>
-//             <Button variant="info" onClick={handleAnalysis}>
-//               Show Analysis
-//             </Button>
-//           </div>
-//           {chartData && (
-//             <div className="mt-4">
-//               <h4>Word Frequency Analysis</h4>
-//               <Bar data={chartData} />
-//             </div>
-//           )}
-//         </div>
-//       )}
-//     </div>
-//   );
-// };
-
-// export default UploadWhatsAppFile;
-
-import React, { useState } from 'react';
-import { Form, Button, Alert } from 'react-bootstrap';
-import { Bar } from 'react-chartjs-2';
-import { ForceGraph2D } from 'react-force-graph';
-
+import React, { useState } from "react";
+import { Form, Button, Alert } from "react-bootstrap";
+import { Bar } from "react-chartjs-2";
+import { ForceGraph2D } from "react-force-graph";
 
 const UploadWhatsAppFile = () => {
   const [file, setFile] = useState(null);
-  const [message, setMessage] = useState('');
-  const [uploadedFile, setUploadedFile] = useState('');
+  const [message, setMessage] = useState("");
+  const [uploadedFile, setUploadedFile] = useState("");
   const [chartData, setChartData] = useState(null);
   const [networkData, setNetworkData] = useState(null);
+  const [filter, setFilter] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [messageLimit, setMessageLimit] = useState(50); // הגבלת כמות ברירת מחדל
 
-  // בחירת קובץ
   const handleFileChange = (event) => {
     setFile(event.target.files[0]);
-    setMessage('');
-    setUploadedFile('');
+    setMessage("");
+    setUploadedFile("");
     setChartData(null);
     setNetworkData(null);
   };
 
-  // העלאת קובץ
   const handleSubmit = (event) => {
     event.preventDefault();
     if (!file) {
-      setMessage('Please select a file before uploading.');
+      setMessage("Please select a file before uploading.");
       return;
     }
 
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
 
-    fetch('http://localhost:8000/upload', {
-      method: 'POST',
+    fetch("http://localhost:8000/upload", {
+      method: "POST",
       body: formData,
     })
       .then((response) => response.json())
@@ -239,23 +43,23 @@ const UploadWhatsAppFile = () => {
           setUploadedFile(data.filename);
         }
       })
-      .catch(() => setMessage('An error occurred during the upload.'));
+      .catch(() => setMessage("An error occurred during the upload."));
   };
 
-  // מחיקת קובץ
   const handleDelete = () => {
-    fetch(`http://localhost:8000/delete/${uploadedFile}`, { method: 'DELETE' })
+    fetch(`http://localhost:8000/delete/${uploadedFile}`, { method: "DELETE" })
       .then((response) => response.json())
       .then((data) => {
-        setMessage(data.message || 'File deleted successfully!');
-        setUploadedFile('');
+        setMessage(data.message || "File deleted successfully!");
+        setUploadedFile("");
         setChartData(null);
         setNetworkData(null);
       })
-      .catch(() => setMessage('An error occurred during the delete operation.'));
+      .catch(() =>
+        setMessage("An error occurred during the delete operation.")
+      );
   };
 
-  // ניתוח Word Frequency
   const handleAnalysis = () => {
     fetch(`http://localhost:8000/analyze/${uploadedFile}`)
       .then((response) => response.json())
@@ -267,35 +71,96 @@ const UploadWhatsAppFile = () => {
             labels,
             datasets: [
               {
-                label: 'Word Frequency',
+                label: "Word Frequency",
                 data: counts,
-                backgroundColor: 'rgba(75,192,192,0.6)',
+                backgroundColor: "rgba(75,192,192,0.6)",
               },
             ],
           });
         }
       })
-      .catch(() => setMessage('An error occurred during analysis.'));
+      .catch(() => setMessage("An error occurred during analysis."));
   };
 
-  // ניתוח רשת (Network Graph)
+  // const handleNetworkAnalysis = () => {
+  //   let url = `http://localhost:8000/analyze/network/${uploadedFile}`;
+  //   if (startDate && endDate) {
+  //     url += `?start_date=${startDate}&end_date=${endDate}`;
+  //   }
+  //   console.log("Request URL:", url);
+   
+  //   fetch(url)
+  //     .then((response) => response.json())
+  //     .then((data) => {
+  //       console.log("Data returned from server:", data); // הדפסת תגובת השרת
+  //       if (data.nodes && data.links) {
+  //         setNetworkData(data);
+  //       } else {
+  //         setMessage("No data returned from server.");
+  //         console.log("No nodes or links found in the response.");
+  //       }
+  //     })
+  //     .catch((err) => {
+  //       setMessage("An error occurred during network analysis.");
+  //       console.error("Error during network analysis:", err);
+  //     });
+  // };
+
   const handleNetworkAnalysis = () => {
-    fetch(`http://localhost:8000/analyze/network/${uploadedFile}`)
+    let url = `http://localhost:8000/analyze/network/${uploadedFile}`;
+    
+    const params = new URLSearchParams();
+    if (startDate) params.append("start_date", startDate);
+    if (endDate) params.append("end_date", endDate);
+    if (messageLimit) params.append("limit", messageLimit);
+  
+    // הרכבת ה-URL עם הפרמטרים
+    url += `?${params.toString()}`;
+    console.log("Request URL:", url);
+  
+    fetch(url)
       .then((response) => response.json())
       .then((data) => {
+        console.log("Data returned from server:", data); // הדפסת תגובת השרת
         if (data.nodes && data.links) {
           setNetworkData(data);
+        } else {
+          setMessage("No data returned from server.");
+          console.log("No nodes or links found in the response.");
         }
       })
-      .catch(() => setMessage('An error occurred during network analysis.'));
+      .catch((err) => {
+        setMessage("An error occurred during network analysis.");
+        console.error("Error during network analysis:", err);
+      });
   };
+  
+
+  const filteredNodes = networkData
+    ? networkData.nodes.filter((node) =>
+        node.id.toLowerCase().includes(filter.toLowerCase())
+      )
+    : [];
+
+  const filteredLinks = networkData
+    ? networkData.links.filter(
+        (link) =>
+          filteredNodes.some((node) => node.id === link.source) &&
+          filteredNodes.some((node) => node.id === link.target)
+      )
+    : [];
 
   return (
     <div className="container mt-5">
       <h2>Upload WhatsApp Chat File</h2>
-      {message && <Alert variant={message.includes('successfully') ? 'success' : 'danger'}>{message}</Alert>}
+      {message && (
+        <Alert
+          variant={message.includes("successfully") ? "success" : "danger"}
+        >
+          {message}
+        </Alert>
+      )}
 
-      {/* טופס העלאת קובץ */}
       <Form onSubmit={handleSubmit}>
         <Form.Group controlId="formFile" className="mb-3">
           <Form.Label>Select WhatsApp Chat File</Form.Label>
@@ -306,7 +171,6 @@ const UploadWhatsAppFile = () => {
         </Button>
       </Form>
 
-      {/* אפשרויות ניתוח ומחיקה */}
       {uploadedFile && (
         <div className="mt-3">
           <p>Uploaded File: {uploadedFile}</p>
@@ -317,36 +181,98 @@ const UploadWhatsAppFile = () => {
             <Button variant="info" onClick={handleAnalysis}>
               Show Word Analysis
             </Button>
+          </div>
+
+          <div className="mt-4 d-flex gap-3 align-items-center">
+            <label>Start Date:</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="form-control"
+            />
+            <label>End Date:</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="form-control"
+            />
             <Button variant="secondary" onClick={handleNetworkAnalysis}>
               Show Network Analysis
             </Button>
           </div>
 
-          {/* גרף Word Frequency */}
-          {chartData && (
-            <div className="mt-4">
-              <h4>Word Frequency Analysis</h4>
-              <Bar data={chartData} />
-            </div>
-          )}
+ {/* Slider לבחירת מגבלת הודעות */}
+ <div className="mt-3">
+            <label>
+              Limit Messages: <b>{messageLimit}</b>
+            </label>
+            <input
+              type="range"
+              min="10"
+              max="500"
+              step="10"
+              value={messageLimit}
+              onChange={(e) => setMessageLimit(e.target.value)}
+              className="form-range"
+            />
+          </div>
 
-          {/* גרף Network Graph */}
+
           {networkData && (
-            <div className="mt-4" style={{ height: '500px', border: '1px solid lightgray' }}>
+            <div
+              className="mt-4"
+              style={{ height: "500px", border: "1px solid lightgray" }}
+            >
               <h4>Social Network Analysis</h4>
+              {/* <ForceGraph2D graphData={{ nodes: filteredNodes, links: filteredLinks }}
+              nodeLabel={(node) => node.id} //יציג לי את השמות
+              nodeAutoColorBy="id"
+               /> */}
               <ForceGraph2D
-                graphData={networkData}
-                nodeAutoColorBy="id"
-                linkDirectionalArrowLength={3.5}
-                linkDirectionalArrowRelPos={1}
+                graphData={{ nodes: filteredNodes, links: filteredLinks }}
+                nodeAutoColorBy="id" // צבע הצמתים לפי השם
                 nodeCanvasObject={(node, ctx, globalScale) => {
-                  const label = node.id;
-                  const fontSize = 12 / globalScale;
+                  const fontSize = 12 / globalScale; // גודל הפונט דינמי
+                  ctx.save();
                   ctx.font = `${fontSize}px Sans-Serif`;
-                  ctx.textAlign = 'center';
-                  ctx.textBaseline = 'middle';
-                  ctx.fillStyle = 'black';
-                  ctx.fillText(label, node.x, node.y);
+                  ctx.textAlign = "center";
+                  ctx.textBaseline = "middle";
+                  ctx.fillStyle = "black"; // צבע הטקסט
+                  ctx.fillText(node.id, node.x, node.y + 10); // שם הצומת מתחת לנקודה
+                  ctx.restore();
+                }}
+                nodeCanvasObjectMode={() => "after"} // מצייר טקסט אחרי הנקודה
+                linkWidth={(link) => link.weight || 1} // עובי הקשת לפי המשקל
+                linkColor={() => "gray"} // צבע ברירת מחדל לקווים
+                linkCanvasObjectMode={() => "after"}
+                linkCanvasObject={(link, ctx, globalScale) => {
+                  const MAX_FONT_SIZE = 10;
+                  const LABEL_OFFSET = 4;
+                  const fontSize = Math.max(MAX_FONT_SIZE / globalScale, 6);
+
+                  // צייר את הקו (במקרה וצריך לצייר ידנית)
+                  ctx.save();
+                  ctx.beginPath();
+                  ctx.moveTo(link.source.x, link.source.y); // התחלה
+                  ctx.lineTo(link.target.x, link.target.y); // יעד
+                  ctx.strokeStyle = "gray";
+                  ctx.lineWidth = link.weight || 1; // עובי לפי משקל
+                  ctx.stroke();
+
+                  // מציאת מרכז הקשת
+                  const midX = (link.source.x + link.target.x) / 2;
+                  const midY = (link.source.y + link.target.y) / 2;
+
+                  // הצגת המשקל מעל הקשת
+                  ctx.font = `${fontSize}px Sans-Serif`;
+                  ctx.fillStyle = "black";
+                  ctx.textAlign = "center";
+                  ctx.textBaseline = "middle";
+                  ctx.fillText(link.weight || 1, midX, midY - LABEL_OFFSET);
+
+                  ctx.restore();
                 }}
               />
             </div>
