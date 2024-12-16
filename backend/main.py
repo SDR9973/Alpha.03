@@ -4,11 +4,20 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 from dotenv import load_dotenv
 from database import db
+from fastapi.middleware.cors import CORSMiddleware
 import os
+import uvicorn
 
 # Load environment variables
 load_dotenv()
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all HTTP methods
+    allow_headers=["*"],  # Allows all headers
+)
 print("API RUNNING")
 researchers = db["researcher"]  # Access the 'researcher' collection
 
@@ -23,24 +32,38 @@ class ResearcherResponse(BaseModel):
     id: str
     name: str
     email: EmailStr
+    password: str
+
+class ResearcherSignIn(BaseModel):
+    password: str
+    email: EmailStr
+
 
 # Utility Function to Convert MongoDB Document
 def document_to_response(doc):
-    return {"id": str(doc["_id"]), "name": doc["name"], "email": doc["email"]}
+    return {"id": str(doc["_id"]), "name": doc["name"], "email": doc["email"], "password":doc["password"] }
 
+@app.post("/researchers/signin", response_model=ResearcherResponse)
+async def signin(data:ResearcherSignIn ):
+    user = await researchers.find_one({"email": data.email, "password":data.password})
+    if not user:  
+        return {"invalid email or password"}
+    else:
+        return document_to_response(user)
+    
 # Create a Researcher
-@app.post("/researchers/", response_model=ResearcherResponse)
+@app.post("/researchers", response_model=ResearcherResponse)
 async def create_researcher(researcher: ResearcherCreate):
     existing = await researchers.find_one({"email": researcher.email})
     if existing:
         raise HTTPException(status_code=400, detail="Email already exists")
     
-    new_researcher = researcher.dict()
+    new_researcher = researcher.model_dump()
     result = await researchers.insert_one(new_researcher)
-    return {"id": str(result.inserted_id), "name": researcher.name, "email": researcher.email}
+    return {"id": str(result.inserted_id), "name": researcher.name, "email": researcher.email, "password":researcher.password }
 
 # Get All Researchers
-@app.get("/researchers/", response_model=list[ResearcherResponse])
+@app.get("/researchers", response_model=list[ResearcherResponse])
 async def get_all_researchers():
     researcher_list = await researchers.find().to_list(100)
     return [document_to_response(researcher) for researcher in researcher_list]
@@ -79,3 +102,6 @@ async def delete_researcher(id: str):
         return {"message": "Researcher deleted successfully"}
     except:
         raise HTTPException(status_code=400, detail="Invalid ID format")
+    
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
