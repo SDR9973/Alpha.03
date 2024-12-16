@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 from database import db
 from fastapi.middleware.cors import CORSMiddleware
 import os
-#import uvicorn
 
 # Load environment variables
 load_dotenv()
@@ -103,5 +102,3 @@ async def delete_researcher(id: str):
     except:
         raise HTTPException(status_code=400, detail="Invalid ID format")
     
-#if __name__ == "__main__":
- #   uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
