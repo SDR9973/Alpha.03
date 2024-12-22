@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import './App.css'
-import UploadWhatsAppFile from './components/Form.jsx';
+import UploadWhatsAppFile from './pages/Form.jsx';
 
 
 function App() {
