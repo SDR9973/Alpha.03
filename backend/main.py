@@ -1,8 +1,7 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile, Query
+from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer
-from fastapi import Depends
 from datetime import datetime, timedelta
 from collections import defaultdict
 from pydantic import BaseModel, EmailStr, Field
@@ -13,13 +12,18 @@ from jose import jwt, JWTError
 import bcrypt
 import os
 
-app = FastAPI()
-load_dotenv()  
+# Load environment variables
+load_dotenv()
 
+# Configuration Constants
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
+UPLOAD_FOLDER = "./uploads/"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Initialize FastAPI
+app = FastAPI()
 
 # CORS Configuration
 app.add_middleware(
@@ -30,6 +34,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# OAuth2 Configuration
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
+
+# Models for request/response data
 class UserCreate(BaseModel):
     name: str
     email: EmailStr
@@ -47,35 +55,46 @@ class UserUpdate(BaseModel):
 class OAuthUser(BaseModel):
     name: str
     email: str
-    photo: str
+    avatar: str
 
 
-def create_access_token(data: dict, expires_delta: timedelta = None):
+# Utility Functions
+def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
+    """
+    Creates a JWT access token.
+    """
     to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-def get_current_user(token: str = Depends(oauth2_scheme)):
+def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
+    """
+    Decodes JWT token to extract current user data.
+    """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("user_id")
-        if user_id is None:
+        if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
         return {"user_id": user_id}
-    except jwt.JWTError:
+    except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+
+# Routes
 @app.get("/protected")
 async def protected_route(current_user: dict = Depends(get_current_user)):
+    """
+    Test protected route that requires authentication.
+    """
     return {"message": f"Hello, user {current_user['user_id']}"}
 
 @app.post("/api/auth/google")
 async def google_auth(user: OAuthUser):
+    """
+    Authenticates user using Google OAuth.
+    """
     users_collection = db["users"]
     existing_user = await users_collection.find_one({"email": user.email})
 
@@ -88,80 +107,73 @@ async def google_auth(user: OAuthUser):
                 "id": existing_user["user_id"],
                 "name": existing_user["name"],
                 "email": existing_user["email"],
+                "avatar": existing_user.get("avatar", "https://cdn-icons-png.flaticon.com/512/64/64572.png")
             },
         }
 
-    user_id = str(uuid4())  
-    new_user = {
-        "user_id": user_id,
-        "name": user.name,
-        "email": user.email,
-        "photo": user.photo,
-    }
+    user_id = str(uuid4())
+    new_user = {"user_id": user_id, "name": user.name, "email": user.email, "avatar": user.avatar}
     await users_collection.insert_one(new_user)
 
     token = create_access_token(data={"user_id": user_id})
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": {"id": user_id, "name": user.name, "email": user.email},
+        "user": {"id": user_id, "name": user.name, "email": user.email, "avatar": user.avatar},
     }
-
 
 @app.post("/register")
 async def register_user(user: UserCreate):
-    users_collection = db["users"] 
-
+    """
+    Registers a new user.
+    """
+    users_collection = db["users"]
     existing_user = await users_collection.find_one({"email": user.email})
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already exists")
+
     hashed_password = bcrypt.hashpw(user.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
-    user_id = str(uuid4())  
-
-    new_user = {
-        "user_id": user_id,
-        "name": user.name,
-        "email": user.email,
-        "password": hashed_password
-    }
-    result = await users_collection.insert_one(new_user)
+    user_id = str(uuid4())
+    new_user = {"user_id": user_id, "name": user.name, "email": user.email, "password": hashed_password}
+    await users_collection.insert_one(new_user)
     return {"id": user_id, "name": user.name, "email": user.email}
-
 
 @app.post("/login")
 async def login_user(user: UserLogin):
-    users_collection = db["users"]  
-
+    """
+    Logs in a user and returns a JWT token.
+    """
+    users_collection = db["users"]
     db_user = await users_collection.find_one({"email": user.email})
     if not db_user or not bcrypt.checkpw(user.password.encode("utf-8"), db_user["password"].encode("utf-8")):
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    
+
     token = create_access_token(data={"user_id": db_user["user_id"]})
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": {"id": db_user["user_id"], "name": db_user["name"], "email": db_user["email"]},
+        "user": {
+            "id": db_user["user_id"],
+            "name": db_user["name"],
+            "email": db_user["email"],
+            "avatar": db_user.get("avatar", "https://cdn-icons-png.flaticon.com/512/64/64572.png")
+        },
     }
-
-
 
 @app.get("/users")
 async def get_all_users():
+    """
+    Fetches a list of all users.
+    """
     users_collection = db["users"]
-    users = await users_collection.find().to_list(100) 
+    users = await users_collection.find().to_list(100)
     return [{"id": user["user_id"], "name": user["name"], "email": user["email"]} for user in users]
-
-@app.get("/users/{user_id}")
-async def get_user_by_id(user_id: str):
-    users_collection = db["users"]
-    user = await users_collection.find_one({"user_id": user_id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return {"id": user["user_id"], "name": user["name"], "email": user["email"]}
 
 @app.put("/users/{user_id}")
 async def update_user(user_id: str, user_update: UserUpdate):
+    """
+    Updates a user's details.
+    """
     users_collection = db["users"]
     update_data = {k: v for k, v in user_update.dict().items() if v is not None}
 
@@ -171,45 +183,38 @@ async def update_user(user_id: str, user_update: UserUpdate):
     result = await users_collection.update_one({"user_id": user_id}, {"$set": update_data})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     updated_user = await users_collection.find_one({"user_id": user_id})
-    return {"user_id": updated_user["user_id"], "name": updated_user["name"], "email": updated_user["email"]}
+    return {
+        "id": updated_user["user_id"],
+        "name": updated_user["name"],
+        "email": updated_user["email"],
+        "avatar": updated_user.get("avatar", "https://cdn-icons-png.flaticon.com/512/64/64572.png")
+    }
 
+@app.post("/upload-avatar")
+async def upload_avatar(file: UploadFile = File(...), token: str = Depends(oauth2_scheme)):
+    """
+    Uploads a new avatar for the authenticated user.
+    """
+    current_user = get_current_user(token)
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
 
+    avatar_folder = os.path.join(UPLOAD_FOLDER, "avatars")
+    os.makedirs(avatar_folder, exist_ok=True)
+    avatar_filename = f"{current_user['user_id']}_{file.filename}"
+    avatar_path = os.path.join(avatar_folder, avatar_filename)
 
-@app.delete("/users/{user_id}")
-async def delete_user(user_id: str):
+    with open(avatar_path, "wb") as avatar_file:
+        avatar_file.write(await file.read())
+
+    avatar_url = f"/static/avatars/{avatar_filename}"
     users_collection = db["users"]
-    result = await users_collection.delete_one({"user_id": user_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
-    return {"message": "User deleted successfully"}
+    await users_collection.update_one({"user_id": current_user["user_id"]}, {"$set": {"avatar": avatar_url}})
+    return {"avatarUrl": avatar_url}
 
 
-UPLOAD_FOLDER = "./uploads/"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-@app.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
-    try:
-        file_path = os.path.join(UPLOAD_FOLDER, file.filename)
-        with open(file_path, "wb") as f:
-            f.write(await file.read())
-        return JSONResponse(content={"message": "File uploaded successfully!", "filename": file.filename}, status_code=200)
-    except Exception as e:
-        return JSONResponse(content={"error": str(e)}, status_code=500)
-
-@app.delete("/delete/{filename}")
-async def delete_file(filename: str):
-    try:
-        file_path = os.path.join(UPLOAD_FOLDER, filename)
-        if os.path.exists(file_path):
-            os.remove(file_path)
-            return JSONResponse(content={"message": f"File '{filename}' deleted successfully!"}, status_code=200)
-        else:
-            return JSONResponse(content={"error": f"File '{filename}' not found."}, status_code=404)
-    except Exception as e:
-        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 @app.get("/analyze/network/{filename}")
 async def analyze_network(

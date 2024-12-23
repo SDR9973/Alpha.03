@@ -25,7 +25,7 @@ const OAuth = () => {
         body: JSON.stringify({
           name: result.user.displayName,
           email: result.user.email,
-          photo: result.user.photoURL,
+          avatar: result.user.photoURL,
         }),
       });
 

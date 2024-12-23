@@ -10,11 +10,6 @@ const Profile = () => {
   const dispatch = useDispatch();
   const { currentUser, token } = useSelector((state) => state.user);
 
-  // Debugging State
-  console.log("Current User:", currentUser);
-  console.log("Token:", token);
-
-  // Redirect if user data is missing
   useEffect(() => {
     if (!currentUser || !token) {
       console.log("User not authenticated, redirecting to sign-in...");
@@ -41,7 +36,7 @@ const Profile = () => {
       const response = await fetch(`http://localhost:8001/users/${currentUser.id}`, {
         method: "DELETE",
         headers: {
-          "Authorization": `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
       });
 
@@ -62,8 +57,18 @@ const Profile = () => {
     return <p>Loading your profile...</p>;
   }
 
+  const avatarUrl = currentUser.avatar || "";
+
   return (
     <Container className="text-center mt-5">
+      <div className="mb-4">
+        <img
+          src={avatarUrl}
+          alt="Profile"
+          className="rounded-circle img-thumbnail"
+          style={{ width: "150px", height: "150px" }}
+        />
+      </div>
       <h2>Welcome, {currentUser.name}!</h2>
       <p>Email: {currentUser.email}</p>
       <div className="mt-4">

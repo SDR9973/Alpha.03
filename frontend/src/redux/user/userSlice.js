@@ -10,7 +10,7 @@ const userSlice = createSlice({
   initialState,
   reducers: {
     setUser(state, action) {
-      const { user, access_token } = action.payload; // Extract correct fields
+      const { user, access_token } = action.payload; 
       state.currentUser = user;
       state.token = access_token;
     },

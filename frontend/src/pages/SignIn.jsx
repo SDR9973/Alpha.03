@@ -42,8 +42,7 @@ const SignIn = () => {
       }
   
       const data = await response.json();
-      console.log("API Response:", data); // Debugging
-      dispatch(setUser(data)); // Pass the entire response to Redux
+      dispatch(setUser(data)); 
       navigate("/profile");
     } catch (err) {
       setError(err.message);
