@@ -1,7 +1,12 @@
-import React from 'react'
+import React from "react";
+import UploadWhatsAppFile from "./Form";
 
 const Home = () => {
-  return (<div>Home</div>);
+  return (
+    <div className="upload-section">
+      <UploadWhatsAppFile />
+    </div>
+  );
 };
 
 export default Home;

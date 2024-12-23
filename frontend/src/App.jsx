@@ -8,7 +8,6 @@ import Profile from "./pages/Profile.jsx";
 import EditProfile from "./pages/EditProfile.jsx";
 import PrivateRoute from './components/PrivateRoute';
 import Header from "./components/Header.jsx";
-import UploadWhatsAppFile from "./pages/Form.jsx";
 import Menu from "./components/Menu/Menu.jsx";
 
 function App() {
@@ -17,8 +16,8 @@ function App() {
   return (
     <>
       <BrowserRouter>
-        {/* <Menu />
-        {user && <Header />}*/}
+        <Menu />
+        {/* {user && <Header />}*/}
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/sign-in" element={<SignIn />} />
@@ -30,9 +29,7 @@ function App() {
           </Route>
         </Routes>
       </BrowserRouter>
-      {/* <div className="upload-section">
-        <UploadWhatsAppFile />
-      </div> */}
+
     </>
   );
 }
