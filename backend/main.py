@@ -1,12 +1,25 @@
-from fastapi import FastAPI, File, UploadFile, Query
+from fastapi import FastAPI, HTTPException, File, UploadFile, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from datetime import datetime
+from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends
+from datetime import datetime, timedelta
 from collections import defaultdict
-
+from pydantic import BaseModel, EmailStr, Field
+from uuid import uuid4
+from database import db
+from dotenv import load_dotenv
+from jose import jwt, JWTError
+import bcrypt
 import os
 
 app = FastAPI()
+load_dotenv()  
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
 # CORS Configuration
 app.add_middleware(
@@ -16,6 +29,162 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+class UserCreate(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class UserUpdate(BaseModel):
+    name: str = Field(None)
+    email: EmailStr = Field(None)
+    password: str = Field(None)
+
+class OAuthUser(BaseModel):
+    name: str
+    email: str
+    photo: str
+
+
+def create_access_token(data: dict, expires_delta: timedelta = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("user_id")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return {"user_id": user_id}
+    except jwt.JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+@app.get("/protected")
+async def protected_route(current_user: dict = Depends(get_current_user)):
+    return {"message": f"Hello, user {current_user['user_id']}"}
+
+@app.post("/api/auth/google")
+async def google_auth(user: OAuthUser):
+    users_collection = db["users"]
+    existing_user = await users_collection.find_one({"email": user.email})
+
+    if existing_user:
+        token = create_access_token(data={"user_id": existing_user["user_id"]})
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "user": {
+                "id": existing_user["user_id"],
+                "name": existing_user["name"],
+                "email": existing_user["email"],
+            },
+        }
+
+    user_id = str(uuid4())  
+    new_user = {
+        "user_id": user_id,
+        "name": user.name,
+        "email": user.email,
+        "photo": user.photo,
+    }
+    await users_collection.insert_one(new_user)
+
+    token = create_access_token(data={"user_id": user_id})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {"id": user_id, "name": user.name, "email": user.email},
+    }
+
+
+@app.post("/register")
+async def register_user(user: UserCreate):
+    users_collection = db["users"] 
+
+    existing_user = await users_collection.find_one({"email": user.email})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already exists")
+    hashed_password = bcrypt.hashpw(user.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+    user_id = str(uuid4())  
+
+    new_user = {
+        "user_id": user_id,
+        "name": user.name,
+        "email": user.email,
+        "password": hashed_password
+    }
+    result = await users_collection.insert_one(new_user)
+    return {"id": user_id, "name": user.name, "email": user.email}
+
+
+@app.post("/login")
+async def login_user(user: UserLogin):
+    users_collection = db["users"]  
+
+    db_user = await users_collection.find_one({"email": user.email})
+    if not db_user or not bcrypt.checkpw(user.password.encode("utf-8"), db_user["password"].encode("utf-8")):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    token = create_access_token(data={"user_id": db_user["user_id"]})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {"id": db_user["user_id"], "name": db_user["name"], "email": db_user["email"]},
+    }
+
+
+
+@app.get("/users")
+async def get_all_users():
+    users_collection = db["users"]
+    users = await users_collection.find().to_list(100) 
+    return [{"id": user["user_id"], "name": user["name"], "email": user["email"]} for user in users]
+
+@app.get("/users/{user_id}")
+async def get_user_by_id(user_id: str):
+    users_collection = db["users"]
+    user = await users_collection.find_one({"user_id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"id": user["user_id"], "name": user["name"], "email": user["email"]}
+
+@app.put("/users/{user_id}")
+async def update_user(user_id: str, user_update: UserUpdate):
+    users_collection = db["users"]
+    update_data = {k: v for k, v in user_update.dict().items() if v is not None}
+
+    if "password" in update_data:
+        update_data["password"] = bcrypt.hashpw(update_data["password"].encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+    result = await users_collection.update_one({"user_id": user_id}, {"$set": update_data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    updated_user = await users_collection.find_one({"user_id": user_id})
+    return {"user_id": updated_user["user_id"], "name": updated_user["name"], "email": updated_user["email"]}
+
+
+
+@app.delete("/users/{user_id}")
+async def delete_user(user_id: str):
+    users_collection = db["users"]
+    result = await users_collection.delete_one({"user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": "User deleted successfully"}
+
 
 UPLOAD_FOLDER = "./uploads/"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
