@@ -239,6 +239,9 @@ const UploadWhatsAppFile = () => {
                 linkWidth={(link) => link.weight || 1}
                 linkColor={() => "gray"}
               /> */}
+
+
+
               <GraphContainer>
                 <ForceGraph2D
                   graphData={{ nodes: filteredNodes, links: filteredLinks }}
@@ -246,21 +249,58 @@ const UploadWhatsAppFile = () => {
                   height={400} // Adjust height based on fixed height of GraphContainer
                   fitView
                   fitViewPadding={20} // Add padding for better visualization
-                  nodeAutoColorBy="id"
-                  linkWidth={(link) => link.weight || 1}
-                  linkColor={() => "gray"}
+                  nodeAutoColorBy="id" // Assign a unique color to each node based on its 'id'
+                  linkWidth={(link) => Math.sqrt(link.weight || 1)} // Set link width based on weight
+                  linkColor={() => "gray"} // Keep links in gray color
+                  linkCanvasObject={(link, ctx, globalScale) => {
+                    // Draw the link line
+                    ctx.beginPath();
+                    ctx.moveTo(link.source.x, link.source.y);
+                    ctx.lineTo(link.target.x, link.target.y);
+                    ctx.strokeStyle = "gray"; // Set link color
+                    ctx.lineWidth = Math.sqrt(link.weight || 1); // Set link width based on weight
+                    ctx.stroke();
+
+                    // Add the weight label at the midpoint of the link
+                    const midX = (link.source.x + link.target.x) / 2;
+                    const midY = (link.source.y + link.target.y) / 2;
+                    const fontSize = 10 / globalScale; // Adjust font size dynamically
+                    ctx.save();
+                    ctx.font = `${fontSize}px Sans-Serif`;
+                    ctx.fillStyle = "black";
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.fillText(link.weight || "1", midX, midY); // Display the weight at the midpoint
+                    ctx.restore();
+                  }}
                   nodeCanvasObject={(node, ctx, globalScale) => {
                     const fontSize = 12 / globalScale; // Adjust font size dynamically
+                    const radius = 8; // Radius for the node circle
                     ctx.save();
+
+                    // Draw the node circle
+                    ctx.beginPath();
+                    ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
+                    ctx.fillStyle = node.color || "blue"; // Use the auto-generated color
+                    ctx.fill();
+
+                    // Add a label under the node
                     ctx.font = `${fontSize}px Sans-Serif`;
                     ctx.textAlign = "center";
                     ctx.textBaseline = "middle";
                     ctx.fillStyle = "black";
-                    ctx.fillText(node.id, node.x, node.y + 10); // Position labels under the nodes
+                    ctx.fillText(node.id, node.x, node.y + radius + 12); // Position labels under the nodes
                     ctx.restore();
                   }}
+
+                  
+                  
                 />
               </GraphContainer>
+
+
+
+
             </div>
           )}
         </div>
