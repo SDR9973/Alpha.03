@@ -24,6 +24,8 @@ dist-ssr
 *.sw?
 
 
+
+
 package-lock.json
 
 # Ignore Python virtual environment
@@ -43,3 +45,6 @@ build/
 
 # Ignore logs
 *.log
+
+#folder upload
+/backend/uploads/
