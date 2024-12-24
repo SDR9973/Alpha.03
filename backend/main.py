@@ -214,6 +214,42 @@ async def upload_avatar(file: UploadFile = File(...), token: str = Depends(oauth
     await users_collection.update_one({"user_id": current_user["user_id"]}, {"$set": {"avatar": avatar_url}})
     return {"avatarUrl": avatar_url}
 
+@app.delete("/users/{user_id}")
+async def delete_user(user_id: str):
+  
+    users_collection = db["users"]
+
+    result = await users_collection.delete_one({"user_id": user_id})
+
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {"message": "User deleted successfully"}
+
+
+
+# network analysis 
+@app.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
+    try:
+        file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+        with open(file_path, "wb") as f:
+            f.write(await file.read())
+        return JSONResponse(content={"message": "File uploaded successfully!", "filename": file.filename}, status_code=200)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+@app.delete("/delete/{filename}")
+async def delete_file(filename: str):
+    try:
+        file_path = os.path.join(UPLOAD_FOLDER, filename)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            return JSONResponse(content={"message": f"File '{filename}' deleted successfully!"}, status_code=200)
+        else:
+            return JSONResponse(content={"error": f"File '{filename}' not found."}, status_code=404)
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
 @app.get("/analyze/network/{filename}")

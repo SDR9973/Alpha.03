@@ -45,7 +45,7 @@ const UploadWhatsAppFile = () => {
     const formData = new FormData();
     formData.append("file", file);
 
-    fetch("http://localhost:8000/upload", {
+    fetch("http://localhost:8001/upload", {
       method: "POST",
       body: formData,
     })
@@ -60,7 +60,7 @@ const UploadWhatsAppFile = () => {
   };
 
   const handleDelete = () => {
-    fetch(`http://localhost:8000/delete/${uploadedFile}`, { method: "DELETE" })
+    fetch(`http://localhost:8001/delete/${uploadedFile}`, { method: "DELETE" })
       .then((response) => response.json())
       .then((data) => {
         setMessage(data.message || "File deleted successfully!");
@@ -97,7 +97,7 @@ const UploadWhatsAppFile = () => {
   // };
 
   const handleNetworkAnalysis = () => {
-    let url = `http://localhost:8000/analyze/network/${uploadedFile}`;
+    let url = `http://localhost:8001/analyze/network/${uploadedFile}`;
 
     const params = new URLSearchParams();
     if (startDate) params.append("start_date", startDate);
