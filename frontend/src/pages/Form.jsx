@@ -292,15 +292,8 @@ const UploadWhatsAppFile = () => {
                     ctx.fillText(node.id, node.x, node.y + radius + 12); // Position labels under the nodes
                     ctx.restore();
                   }}
-
-                  
-                  
                 />
               </GraphContainer>
-
-
-
-
             </div>
           )}
         </div>
