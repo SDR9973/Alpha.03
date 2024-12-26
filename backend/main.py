@@ -340,3 +340,31 @@ async def analyze_network(
     except Exception as e:
         print("Error:", e)
         return JSONResponse(content={"error": str(e)}, status_code=500)
+
+# save reaserch to mongo db
+@app.post("/save-form")
+async def save_form(data: dict):
+    """
+    Save form data into the Research_user collection in MongoDB.
+    """
+    try:
+        # הגדרת הקולקציה מתוך מסד הנתונים
+        research_collection = db["Research_user"]
+        
+        # מבנה הנתונים שיוכנס למסד
+        form_data = {
+            "name": data.get("name"),
+            "description": data.get("description"),
+            "start_date": data.get("start_date"),
+            "end_date": data.get("end_date"),
+            "message_limit": data.get("message_limit"),
+            "created_at": datetime.utcnow(),
+        }
+        
+        # שמירת הנתונים למסד
+        result = await research_collection.insert_one(form_data)
+        
+        # החזרת תשובה למשתמש
+        return {"message": "Form saved successfully", "id": str(result.inserted_id)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error saving form: {str(e)}")
