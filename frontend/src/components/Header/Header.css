@@ -1,0 +1,45 @@
+.header-navbar {
+  background-color: #ffffff;
+  padding: 12px 25px;
+  position: fixed;
+  top: 0;
+  left: 80px;
+  width: calc(100% - 80px);
+  transition: left 0.3s ease-in-out, width 0.3s ease-in-out;
+  z-index: 1000;
+}
+
+.header-navbar.open {
+  left: 250px;
+  width: calc(100% - 250px);
+}
+
+.icon-container {
+  display: flex;
+  align-items: center;
+  gap: 25px;
+}
+
+.bell-icon {
+  position: relative;
+  cursor: pointer;
+  color: #4a4a4a;
+}
+
+.bell-icon::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 7px;
+  height: 7px;
+  background-color: red;
+  border-radius: 50%;
+}
+
+.profile-image {
+  width: 42px;
+  height: 42px;
+  border: 2px solid #e0e0e0;
+  cursor: pointer;
+}

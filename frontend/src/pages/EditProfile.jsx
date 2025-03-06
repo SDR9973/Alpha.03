@@ -35,7 +35,7 @@ const EditProfile = () => {
         const formData = new FormData();
         formData.append("file", file);
 
-        const response = await fetch("http://localhost:8001/upload-avatar", {
+        const response = await fetch("http://localhost:8000/upload-avatar", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,

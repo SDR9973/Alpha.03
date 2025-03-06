@@ -6,31 +6,32 @@ import SignIn from "./pages/SignIn.jsx";
 import SignUp from "./pages/SignUp.jsx";
 import Profile from "./pages/Profile.jsx";
 import EditProfile from "./pages/EditProfile.jsx";
-import PrivateRoute from './components/PrivateRoute';
-import Header from "./components/Header.jsx";
-// import Menu from "./components/Menu/Menu.jsx";
+import PrivateRoute from "./components/PrivateRoute";
+import Header from "./components/Header/Header.jsx";
+import Menu from "./components/Menu/Menu.jsx";
+import UploadWhatsAppFile from "./pages/Form.jsx";
 
 function App() {
-  const [count, setCount] = useState(0);
+  const [isOpen, setIsOpen] = useState(false);
   const user = localStorage.getItem("user");
+
   return (
-    <>
-      <BrowserRouter>
-        {/* <Menu /> */}
-        {/* {user && <Header />}*/}
+    <BrowserRouter>
+      <Menu isOpen={isOpen} setIsOpen={setIsOpen} />
+      <Header isOpen={isOpen} />
+      {/* {user && <Header isOpen={isOpen} />} */}
+      <div className={`main-content ${isOpen ? "expanded" : "collapsed"}`}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/sign-in" element={<SignIn />} />
           <Route path="/sign-up" element={<SignUp />} />
-          {/* Private Routes */}
           <Route element={<PrivateRoute />}>
             <Route path="/profile" element={<Profile />} />
             <Route path="/edit-profile" element={<EditProfile />} />
           </Route>
         </Routes>
-      </BrowserRouter>
-
-    </>
+      </div>
+    </BrowserRouter>
   );
 }
 

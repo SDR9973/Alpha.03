@@ -35,7 +35,7 @@ const Profile = () => {
     }
 
     try {
-      const response = await fetch(`http://localhost:8001/users/${currentUser.id}`, {
+      const response = await fetch(`http://localhost:8000/users/${currentUser.id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,

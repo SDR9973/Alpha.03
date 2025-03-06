@@ -40,3 +40,15 @@
 .read-the-docs {
   color: #888;
 } */
+.main-content {
+  transition: margin-left 0.3s ease-in-out;
+  padding-top: 70px; 
+}
+
+.main-content.expanded {
+  margin-left: 250px; 
+}
+
+.main-content.collapsed {
+  margin-left: 80px; 
+}
