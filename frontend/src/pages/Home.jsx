@@ -200,6 +200,45 @@ const Home = () => {
       })
       .catch(() => setMessage("An error occurred while saving the form."));
   };
+  const calculateNodeDegree = (nodes, links) => {
+    const degreeMap = {};
+
+    nodes.forEach((node) => {
+      degreeMap[node.id] = 0;
+    });
+
+    links.forEach((link) => {
+      if (link.source.id) {
+        degreeMap[link.source.id] += 1;
+      } else {
+        degreeMap[link.source] += 1;
+      }
+
+      if (link.target.id) {
+        degreeMap[link.target.id] += 1;
+      } else {
+        degreeMap[link.target] += 1;
+      }
+    });
+
+    return nodes.map((node) => ({
+      ...node,
+      degree: degreeMap[node.id] || 0, 
+    }));
+  };
+
+  const handleDegreeMetric = () => {
+    setShowDegree(!showDegree);
+
+    if (!showDegree && networkData) {
+      const updatedNodes = calculateNodeDegree(
+        networkData.nodes,
+        networkData.links
+      );
+      console.log("Updated Nodes with Degree:", updatedNodes);
+      setNetworkData({ nodes: updatedNodes, links: networkData.links });
+    }
+  };
 
   const filteredNodes = networkData
     ? networkData.nodes.filter((node) =>
