@@ -12,10 +12,8 @@ import {
 } from "react-bootstrap-icons";
 import { ForceGraph2D } from "react-force-graph";
 import "./Home.css";
-
 // Import custom styles
 import { AlertBox, GraphContainer } from "./Form.style.js";
-
 const Home = () => {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -37,7 +35,6 @@ const Home = () => {
   const [showMetrics, setShowMetrics] = useState(true);
   const forceGraphRef = useRef(null);
   const [showDegree, setShowDegree] = useState(false);
-
   const graphMetrics = [
     "Degree",
     "Betweenness",
@@ -46,7 +43,6 @@ const Home = () => {
     "Diameter",
     "Metrics",
   ];
-
   useEffect(() => {
     if (!uploadedFile) {
       setFile(null);
@@ -65,21 +61,16 @@ const Home = () => {
       }
     }
   }, [uploadedFile, showMetrics]);
-
   const handleFileChange = (event) => {
     const selectedFile = event.target.files[0];
-
     if (!selectedFile) return;
-
     setFile(selectedFile);
     setUploadedFile("");
     setChartData(null);
     setNetworkData(null);
     setMessage("");
-
     handleSubmit(selectedFile);
   };
-
   const handleUploadClick = () => {
     fileInputRef.current.click();
   };
@@ -91,10 +82,8 @@ const Home = () => {
       setMessage("Please select a file before uploading.");
       return;
     }
-
     const formData = new FormData();
     formData.append("file", selectedFile);
-
     fetch("http://localhost:8000/upload", {
       method: "POST",
       body: formData,
@@ -108,20 +97,17 @@ const Home = () => {
       })
       .catch(() => setMessage("An error occurred during the upload."));
   };
-
   const handleDelete = async () => {
     if (!uploadedFile) {
       setMessage("No file selected to delete.");
       return;
     }
-
     try {
       const response = await fetch(
         `http://localhost:8000/delete/${uploadedFile}`,
         { method: "DELETE" }
       );
       const data = await response.json();
-
       if (data.success) {
         setMessage(data.message || "File deleted successfully!");
         setUploadedFile("");
@@ -143,18 +129,14 @@ const Home = () => {
       setMessage("An error occurred during the delete operation.");
     }
   };
-
   const handleNetworkAnalysis = () => {
     let url = `http://localhost:8000/analyze/network/${uploadedFile}`;
-
     const params = new URLSearchParams();
     if (startDate) params.append("start_date", startDate);
     if (endDate) params.append("end_date", endDate);
     if (messageLimit) params.append("limit", messageLimit);
-
     url += `?${params.toString()}`;
     console.log("Request URL:", url);
-
     fetch(url)
       .then((response) => response.json())
       .then((data) => {
@@ -170,13 +152,11 @@ const Home = () => {
         console.error("Error during network analysis:", err);
       });
   };
-
   const handleSaveToDB = () => {
     if (!name || !description) {
       setMessage("Please fill in all required fields.");
       return;
     }
-
     const formData = {
       name,
       description,
@@ -184,7 +164,6 @@ const Home = () => {
       end_date: endDate,
       message_limit: messageLimit,
     };
-
     fetch("http://localhost:8001/save-form", {
       method: "POST",
       headers: {
@@ -223,7 +202,7 @@ const Home = () => {
 
     return nodes.map((node) => ({
       ...node,
-      degree: degreeMap[node.id] || 0, 
+      degree: degreeMap[node.id] || 0,
     }));
   };
 
@@ -245,7 +224,6 @@ const Home = () => {
         node.id.toLowerCase().includes(filter.toLowerCase())
       )
     : [];
-
   const filteredLinks = networkData
     ? networkData.links.filter(
         (link) =>
@@ -253,7 +231,6 @@ const Home = () => {
           filteredNodes.some((node) => node.id === link.target)
       )
     : [];
-
   return (
     <Container fluid className="upload-section">
       {/* Research Upload */}
@@ -263,7 +240,6 @@ const Home = () => {
             <Col>
               <h4 className="fw-bold">New Research</h4>
             </Col>
-
             <Col className="text-end">
               <Button className="action-btn me-2">
                 <Save size={16} /> Save
@@ -273,7 +249,6 @@ const Home = () => {
               </Button>
             </Col>
           </Row>
-
           <Row className="mt-3 align-items-center">
             <Col lg={8} md={12}>
               <Form.Group className="mb-3">
@@ -317,7 +292,6 @@ const Home = () => {
                 key={inputKey}
                 style={{ display: "none" }}
               />
-
               {/* {file && <p className="mt-2">Selected File: {file.name}</p>} */}
               {message && (
                 <AlertBox success={message.includes("successfully")}>
@@ -328,7 +302,6 @@ const Home = () => {
           </Row>
         </Form>
       </Card>
-
       {/* Research Filters */}
       {uploadedFile && (
         <div>
@@ -408,7 +381,6 @@ const Home = () => {
                       />
                     </Form.Group>
                   </Col>
-
                   <Col lg={4} md={4} className="mb-3">
                     <Form.Group>
                       <Form.Label className="research-label">
@@ -452,7 +424,6 @@ const Home = () => {
               </div>
             )}
           </Card>
-
           {uploadedFile && (
             <Row className="mt-4">
               <Col
@@ -496,7 +467,6 @@ const Home = () => {
                   )}
                 </Card>
               </Col>
-
               {/* Graph Display */}
               <Col lg={9} md={12} className="graph-area">
                 <Card className="graph-card">
@@ -512,7 +482,20 @@ const Home = () => {
                           key={showMetrics}
                           graphData={{
                             nodes: filteredNodes,
-                            links: filteredLinks,
+                            links: filteredLinks.map((link) => ({
+                              source:
+                                filteredNodes.find(
+                                  (node) =>
+                                    node.id === link.source.id ||
+                                    node.id === link.source
+                                ) || link.source,
+                              target:
+                                filteredNodes.find(
+                                  (node) =>
+                                    node.id === link.target.id ||
+                                    node.id === link.target
+                                ) || link.target,
+                            })),
                           }}
                           width={showMetrics ? 1200 : 1500}
                           height={500}
@@ -521,14 +504,21 @@ const Home = () => {
                           nodeAutoColorBy="id"
                           linkWidth={(link) => Math.sqrt(link.weight || 1)}
                           linkColor={() => "gray"}
+                          enableNodeDrag={true}
+                          cooldownTicks={100} 
+                          d3AlphaDecay={0.03} 
+                          d3VelocityDecay={0.2} 
+                          onEngineStop={() =>
+                            forceGraphRef.current?.zoomToFit(400, 100)
+                          }
                           linkCanvasObject={(link, ctx, globalScale) => {
+                            if (!link.source || !link.target) return;
                             ctx.beginPath();
                             ctx.moveTo(link.source.x, link.source.y);
                             ctx.lineTo(link.target.x, link.target.y);
                             ctx.strokeStyle = "gray";
                             ctx.lineWidth = Math.sqrt(link.weight || 1);
                             ctx.stroke();
-
                             const midX = (link.source.x + link.target.x) / 2;
                             const midY = (link.source.y + link.target.y) / 2;
                             const fontSize = 10 / globalScale;
@@ -544,7 +534,6 @@ const Home = () => {
                             const fontSize = 12 / globalScale;
                             const radius = 8;
                             ctx.save();
-
                             ctx.beginPath();
                             ctx.arc(
                               node.x,
@@ -556,13 +545,11 @@ const Home = () => {
                             );
                             ctx.fillStyle = node.color || "blue";
                             ctx.fill();
-
                             ctx.font = `${fontSize}px Sans-Serif`;
                             ctx.textAlign = "center";
                             ctx.textBaseline = "middle";
                             ctx.fillStyle = "black";
                             ctx.fillText(node.id, node.x, node.y + radius + 12);
-
                             if (showDegree) {
                               ctx.fillStyle = "DarkBlue";
                               ctx.fillText(
@@ -571,7 +558,6 @@ const Home = () => {
                                 node.y + radius + 40
                               );
                             }
-
                             ctx.restore();
                           }}
                         />
@@ -587,5 +573,4 @@ const Home = () => {
     </Container>
   );
 };
-
 export default Home;
