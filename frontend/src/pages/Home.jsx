@@ -35,6 +35,8 @@ const Home = () => {
   const [showMetrics, setShowMetrics] = useState(true);
   const forceGraphRef = useRef(null);
   const [showDegree, setShowDegree] = useState(false);
+  const [showBetweenness, setShowBetweenness] = useState(false);
+
   const graphMetrics = [
     "Degree",
     "Betweenness",
@@ -214,8 +216,34 @@ const Home = () => {
         networkData.nodes,
         networkData.links
       );
-      console.log("Updated Nodes with Degree:", updatedNodes);
-      setNetworkData({ nodes: updatedNodes, links: networkData.links });
+
+      setNetworkData((prevData) => ({
+        nodes: prevData.nodes.map((node) => ({
+          ...node,
+          degree:
+            updatedNodes.find((updatedNode) => updatedNode.id === node.id)
+              ?.degree || 0,
+          betweenness: node.betweenness || 0, // betweenness
+        })),
+        links: prevData.links,
+      }));
+    }
+  };
+
+  const handleBetweennessMetric = () => {
+    setShowBetweenness(!showBetweenness);
+
+    if (!showBetweenness && networkData) {
+      const updatedNodes = networkData.nodes.map((node) => ({
+        ...node,
+        betweenness: node.betweenness || 0,
+        degree: node.degree || 0, //degree
+      }));
+
+      setNetworkData((prevData) => ({
+        nodes: updatedNodes,
+        links: prevData.links,
+      }));
     }
   };
 
@@ -455,10 +483,18 @@ const Home = () => {
                           key={index}
                           className={`metrics-item ${
                             metric === "Degree" && showDegree ? "active" : ""
+                          } ${
+                            metric === "Betweenness" && showBetweenness
+                              ? "active"
+                              : ""
                           }`}
-                          onClick={
-                            metric === "Degree" ? handleDegreeMetric : null
-                          }
+                          onClick={() => {
+                            if (metric === "Degree") {
+                              handleDegreeMetric();
+                            } else if (metric === "Betweenness") {
+                              handleBetweennessMetric();
+                            }
+                          }}
                         >
                           {metric}
                         </Button>
@@ -505,9 +541,9 @@ const Home = () => {
                           linkWidth={(link) => Math.sqrt(link.weight || 1)}
                           linkColor={() => "gray"}
                           enableNodeDrag={true}
-                          cooldownTicks={100} 
-                          d3AlphaDecay={0.03} 
-                          d3VelocityDecay={0.2} 
+                          cooldownTicks={100}
+                          d3AlphaDecay={0.03}
+                          d3VelocityDecay={0.2}
                           onEngineStop={() =>
                             forceGraphRef.current?.zoomToFit(400, 100)
                           }
@@ -532,8 +568,14 @@ const Home = () => {
                           }}
                           nodeCanvasObject={(node, ctx, globalScale) => {
                             const fontSize = 12 / globalScale;
-                            const radius = 8;
+                            const radius = showBetweenness
+                              ? Math.max(5, node.betweenness * 20)
+                              : showDegree
+                              ? Math.max(5, node.degree * 5)
+                              : 8;
+
                             ctx.save();
+
                             ctx.beginPath();
                             ctx.arc(
                               node.x,
@@ -543,21 +585,37 @@ const Home = () => {
                               2 * Math.PI,
                               false
                             );
-                            ctx.fillStyle = node.color || "blue";
+                            ctx.fillStyle = showBetweenness
+                              ? "red"
+                              : showDegree
+                              ? "#231d81"
+                              : node.color || "blue";
                             ctx.fill();
+
                             ctx.font = `${fontSize}px Sans-Serif`;
                             ctx.textAlign = "center";
                             ctx.textBaseline = "middle";
                             ctx.fillStyle = "black";
                             ctx.fillText(node.id, node.x, node.y + radius + 12);
+
                             if (showDegree) {
-                              ctx.fillStyle = "DarkBlue";
+                              ctx.fillStyle = "#231d81";
                               ctx.fillText(
                                 `Deg: ${node.degree}`,
                                 node.x,
-                                node.y + radius + 40
+                                node.y + radius + 20
                               );
                             }
+
+                            if (showBetweenness) {
+                              ctx.fillStyle = "DarkRed";
+                              ctx.fillText(
+                                `Btw: ${node.betweenness.toFixed(2)}`,
+                                node.x,
+                                node.y + radius + 35
+                              );
+                            }
+
                             ctx.restore();
                           }}
                         />
