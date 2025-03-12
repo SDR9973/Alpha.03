@@ -350,16 +350,21 @@ async def analyze_network(
                 except Exception as e:
                     print(f"Error processing line: {line.strip()} - {e}")
                     continue
+                
         filtered_users = {
             user: count
             for user, count in user_message_count.items()
             if (not min_messages or count >= min_messages) and (not max_messages or count <= max_messages)
         }
         
+        if active_users:
+            sorted_users = sorted(filtered_users.items(), key=lambda x: x[1], reverse=True)[:active_users]
+            filtered_users = dict(sorted_users)
+        
         # יצירת רשימת הצמתים והקשרים עם משקלים
         # nodes_list = [{"id": node} for node in nodes]
-        nodes_list = [{"id": user, "messages": count} for user, count in user_message_count.items()
-                    if (not min_messages or count >= min_messages) and (not max_messages or count <= max_messages)]
+        nodes_list = [{"id": user, "messages": count} for user, count in filtered_users.items()]
+
 
         links_list = [
             {"source": edge[0], "target": edge[1], "weight": weight}
