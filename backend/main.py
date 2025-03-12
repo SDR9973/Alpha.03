@@ -362,6 +362,9 @@ async def analyze_network(
             sorted_users = sorted(filtered_users.items(), key=lambda x: x[1], reverse=True)[:active_users]
             filtered_users = dict(sorted_users)
         
+        if selected_users:
+            filtered_users = {user: count for user, count in filtered_users.items() if user.lower() in selected_user_list}
+    
         # יצירת רשימת הצמתים והקשרים עם משקלים
         # nodes_list = [{"id": node} for node in nodes]
         nodes_list = [{"id": user, "messages": count} for user, count in filtered_users.items()]
