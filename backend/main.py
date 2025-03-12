@@ -259,7 +259,8 @@ async def analyze_network(
     end_date: str = Query(None),
     limit: int = Query(None),  
     min_length: int = Query(None),  
-    max_length: int = Query(None)
+    max_length: int = Query(None),
+    keywords: str = Query(None)
 ):
     try:
         # בדיקה אם הקובץ קיים
@@ -275,6 +276,7 @@ async def analyze_network(
         # המרת טווח תאריכים אם הוזנו
         start = datetime.strptime(start_date, "%Y-%m-%d") if start_date else None
         end = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
+        keyword_list = [kw.strip().lower() for kw in keywords.split(",")] if keywords else []
 
         print(f"Analyzing file: {file_path} with range {start} to {end}")
 
@@ -319,7 +321,10 @@ async def analyze_network(
                         message_length = len(message_content)
                         if (min_length and message_length < min_length) or (max_length and message_length > max_length):
                             continue 
-
+                        
+                        if keywords and not any(kw in message_content.lower() for kw in keyword_list):
+                            continue  
+                        
                         if sender:
                             nodes.add(sender)  # הוספת שולח לצמתים
 

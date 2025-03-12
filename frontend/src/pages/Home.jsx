@@ -162,6 +162,7 @@ const Home = () => {
     if (messageLimit) params.append("limit", messageLimit);
     if (minMessageLength) params.append("min_length", minMessageLength);
     if (maxMessageLength) params.append("max_length", maxMessageLength);
+    if (keywords) params.append("keywords", keywords);
     url += `?${params.toString()}`;
     console.log("Request URL:", url);
     fetch(url)
