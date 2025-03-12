@@ -36,6 +36,9 @@ const Home = () => {
   const forceGraphRef = useRef(null);
   const [showDegree, setShowDegree] = useState(false);
   const [showBetweenness, setShowBetweenness] = useState(false);
+  const [showCloseness, setShowCloseness] = useState(false);
+  const [showDensity, setShowDensity] = useState(false);
+  const [densityValue, setDensityValue] = useState(0);
 
   const graphMetrics = [
     "Degree",
@@ -43,8 +46,8 @@ const Home = () => {
     "Closeness",
     "Density",
     "Diameter",
-    "Metrics",
   ];
+
   useEffect(() => {
     if (!uploadedFile) {
       setFile(null);
@@ -63,6 +66,7 @@ const Home = () => {
       }
     }
   }, [uploadedFile, showMetrics]);
+
   const handleFileChange = (event) => {
     const selectedFile = event.target.files[0];
     if (!selectedFile) return;
@@ -73,12 +77,15 @@ const Home = () => {
     setMessage("");
     handleSubmit(selectedFile);
   };
+
   const handleUploadClick = () => {
     fileInputRef.current.click();
   };
+
   const handleInputChange = (setter) => (e) => {
     setter(e.target.value);
   };
+
   const handleSubmit = (selectedFile) => {
     if (!selectedFile) {
       setMessage("Please select a file before uploading.");
@@ -99,6 +106,7 @@ const Home = () => {
       })
       .catch(() => setMessage("An error occurred during the upload."));
   };
+
   const handleDelete = async () => {
     if (!uploadedFile) {
       setMessage("No file selected to delete.");
@@ -131,6 +139,7 @@ const Home = () => {
       setMessage("An error occurred during the delete operation.");
     }
   };
+
   const handleNetworkAnalysis = () => {
     let url = `http://localhost:8000/analyze/network/${uploadedFile}`;
     const params = new URLSearchParams();
@@ -154,6 +163,7 @@ const Home = () => {
         console.error("Error during network analysis:", err);
       });
   };
+
   const handleSaveToDB = () => {
     if (!name || !description) {
       setMessage("Please fill in all required fields.");
@@ -181,52 +191,25 @@ const Home = () => {
       })
       .catch(() => setMessage("An error occurred while saving the form."));
   };
+
   const calculateNodeDegree = (nodes, links) => {
     const degreeMap = {};
-
-    nodes.forEach((node) => {
-      degreeMap[node.id] = 0;
-    });
-
+    nodes.forEach((node) => (degreeMap[node.id] = 0));
     links.forEach((link) => {
-      if (link.source.id) {
-        degreeMap[link.source.id] += 1;
-      } else {
-        degreeMap[link.source] += 1;
-      }
-
-      if (link.target.id) {
-        degreeMap[link.target.id] += 1;
-      } else {
-        degreeMap[link.target] += 1;
-      }
+      degreeMap[link.source] += 1;
+      degreeMap[link.target] += 1;
     });
-
-    return nodes.map((node) => ({
-      ...node,
-      degree: degreeMap[node.id] || 0,
-    }));
+    return nodes.map((node) => ({ ...node, degree: degreeMap[node.id] || 0 }));
   };
 
   const handleDegreeMetric = () => {
     setShowDegree(!showDegree);
-
     if (!showDegree && networkData) {
       const updatedNodes = calculateNodeDegree(
         networkData.nodes,
         networkData.links
       );
-
-      setNetworkData((prevData) => ({
-        nodes: prevData.nodes.map((node) => ({
-          ...node,
-          degree:
-            updatedNodes.find((updatedNode) => updatedNode.id === node.id)
-              ?.degree || 0,
-          betweenness: node.betweenness || 0, // betweenness
-        })),
-        links: prevData.links,
-      }));
+      setNetworkData({ nodes: updatedNodes, links: networkData.links });
     }
   };
 
@@ -247,6 +230,69 @@ const Home = () => {
     }
   };
 
+  const calculateCloseness = (nodes, links) => {
+    const distances = {};
+    nodes.forEach((node) => {
+      distances[node.id] = {};
+      nodes.forEach(
+        (n) => (distances[node.id][n.id] = node.id === n.id ? 0 : Infinity)
+      );
+    });
+
+    links.forEach((link) => {
+      distances[link.source][link.target] = 1;
+      distances[link.target][link.source] = 1;
+    });
+
+    nodes.forEach((k) => {
+      nodes.forEach((i) => {
+        nodes.forEach((j) => {
+          if (
+            distances[i.id][j.id] >
+            distances[i.id][k.id] + distances[k.id][j.id]
+          ) {
+            distances[i.id][j.id] =
+              distances[i.id][k.id] + distances[k.id][j.id];
+          }
+        });
+      });
+    });
+
+    return nodes.map((node) => {
+      const sumDistances = Object.values(distances[node.id]).reduce(
+        (a, b) => a + (b !== Infinity ? b : 0),
+        0
+      );
+      const closeness = sumDistances > 0 ? 1 / sumDistances : 0;
+      return { ...node, closeness };
+    });
+  };
+
+  const handleClosenessMetric = () => {
+    setShowCloseness(!showCloseness);
+    if (!showCloseness && networkData) {
+      const updatedNodes = calculateCloseness(
+        networkData.nodes,
+        networkData.links
+      );
+      setNetworkData({ nodes: updatedNodes, links: networkData.links });
+    }
+  };
+
+  const handleDensityMetric = () => {
+    setShowDensity(!showDensity);
+    if (!showDensity && networkData) {
+      const density = calculateDensity(networkData.nodes, networkData.links);
+      setDensityValue(density.toFixed(4));
+    }
+  };
+
+  const calculateDensity = (nodes, links) => {
+    const n = nodes.length;
+    const m = links.length;
+    if (n <= 1) return 0;
+    return (2 * m) / (n * (n - 1));
+  };
   const filteredNodes = networkData
     ? networkData.nodes.filter((node) =>
         node.id.toLowerCase().includes(filter.toLowerCase())
@@ -259,6 +305,7 @@ const Home = () => {
           filteredNodes.some((node) => node.id === link.target)
       )
     : [];
+
   return (
     <Container fluid className="upload-section">
       {/* Research Upload */}
@@ -478,22 +525,23 @@ const Home = () => {
                   </h4>
                   {showMetrics && (
                     <div className="mt-2">
-                      {graphMetrics.map((metric, index) => (
+                      {graphMetrics.map((metric) => (
                         <Button
-                          key={index}
+                          key={metric}
                           className={`metrics-item ${
-                            metric === "Degree" && showDegree ? "active" : ""
-                          } ${
-                            metric === "Betweenness" && showBetweenness
+                            (metric === "Degree" && showDegree) ||
+                            (metric === "Betweenness" && showBetweenness) ||
+                            (metric === "Closeness" && showCloseness) ||
+                            (metric === "Density" && showDensity)
                               ? "active"
                               : ""
                           }`}
                           onClick={() => {
-                            if (metric === "Degree") {
-                              handleDegreeMetric();
-                            } else if (metric === "Betweenness") {
+                            if (metric === "Degree") handleDegreeMetric();
+                            if (metric === "Betweenness")
                               handleBetweennessMetric();
-                            }
+                            if (metric === "Closeness") handleClosenessMetric();
+                            if (metric === "Density") handleDensityMetric();
                           }}
                         >
                           {metric}
@@ -505,17 +553,28 @@ const Home = () => {
               </Col>
               {/* Graph Display */}
               <Col lg={9} md={12} className="graph-area">
+                {showDensity && (
+                  <Card className="density-card">
+                    <h5 className="fw-bold">Graph Density: {densityValue}</h5>
+                  </Card>
+                )}
                 <Card className="graph-card">
                   {/* <span
-                      className="position-absolute top-0 end-0 p-2 text-muted"
-                      style={{ cursor: "pointer" }}>
-                      Save
-                    </span> */}
+                    className="position-absolute top-0 end-0 p-2 text-muted"
+                    style={{ cursor: "pointer" }}
+                  >
+                    Save{" "}
+                  </span> */}
                   <div className="graph-placeholder">
                     {networkData && (
                       <GraphContainer>
                         <ForceGraph2D
-                          key={showMetrics}
+                          key={
+                            showDegree ||
+                            showBetweenness ||
+                            showCloseness ||
+                            showDensity
+                          }
                           graphData={{
                             nodes: filteredNodes,
                             links: filteredLinks.map((link) => ({
@@ -568,14 +627,15 @@ const Home = () => {
                           }}
                           nodeCanvasObject={(node, ctx, globalScale) => {
                             const fontSize = 12 / globalScale;
-                            const radius = showBetweenness
+                            const radius = showCloseness
+                              ? Math.max(5, node.closeness * 200)
+                              : showBetweenness
                               ? Math.max(5, node.betweenness * 20)
                               : showDegree
                               ? Math.max(5, node.degree * 5)
                               : 8;
 
                             ctx.save();
-
                             ctx.beginPath();
                             ctx.arc(
                               node.x,
@@ -585,7 +645,9 @@ const Home = () => {
                               2 * Math.PI,
                               false
                             );
-                            ctx.fillStyle = showBetweenness
+                            ctx.fillStyle = showCloseness
+                              ? "green"
+                              : showBetweenness
                               ? "red"
                               : showDegree
                               ? "#231d81"
@@ -606,7 +668,6 @@ const Home = () => {
                                 node.y + radius + 20
                               );
                             }
-
                             if (showBetweenness) {
                               ctx.fillStyle = "DarkRed";
                               ctx.fillText(
@@ -615,7 +676,14 @@ const Home = () => {
                                 node.y + radius + 35
                               );
                             }
-
+                            if (showCloseness) {
+                              ctx.fillStyle = "green";
+                              ctx.fillText(
+                                `Cls: ${node.closeness.toFixed(2)}`,
+                                node.x,
+                                node.y + radius + 50
+                              );
+                            }
                             ctx.restore();
                           }}
                         />
