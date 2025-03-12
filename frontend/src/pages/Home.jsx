@@ -33,12 +33,14 @@ const Home = () => {
   const [inputKey, setInputKey] = useState(Date.now());
   const [showFilters, setShowFilters] = useState(true);
   const [showMetrics, setShowMetrics] = useState(true);
-  const forceGraphRef = useRef(null);
   const [showDegree, setShowDegree] = useState(false);
   const [showBetweenness, setShowBetweenness] = useState(false);
   const [showCloseness, setShowCloseness] = useState(false);
   const [showDensity, setShowDensity] = useState(false);
   const [densityValue, setDensityValue] = useState(0);
+  const [showDiameter, setShowDiameter] = useState(false);
+  const [diameterValue, setDiameterValue] = useState(0);
+  const forceGraphRef = useRef(null);
 
   const graphMetrics = [
     "Degree",
@@ -220,7 +222,7 @@ const Home = () => {
       const updatedNodes = networkData.nodes.map((node) => ({
         ...node,
         betweenness: node.betweenness || 0,
-        degree: node.degree || 0, //degree
+        degree: node.degree || 0,
       }));
 
       setNetworkData((prevData) => ({
@@ -293,6 +295,55 @@ const Home = () => {
     if (n <= 1) return 0;
     return (2 * m) / (n * (n - 1));
   };
+
+  const calculateDiameter = (nodes, links) => {
+    const distances = {};
+    nodes.forEach((node) => {
+      distances[node.id] = {};
+      nodes.forEach(
+        (n) => (distances[node.id][n.id] = node.id === n.id ? 0 : Infinity)
+      );
+    });
+
+    links.forEach((link) => {
+      distances[link.source][link.target] = 1;
+      distances[link.target][link.source] = 1;
+    });
+
+    nodes.forEach((k) => {
+      nodes.forEach((i) => {
+        nodes.forEach((j) => {
+          if (
+            distances[i.id][j.id] >
+            distances[i.id][k.id] + distances[k.id][j.id]
+          ) {
+            distances[i.id][j.id] =
+              distances[i.id][k.id] + distances[k.id][j.id];
+          }
+        });
+      });
+    });
+
+    let maxDistance = 0;
+    nodes.forEach((i) => {
+      nodes.forEach((j) => {
+        if (distances[i.id][j.id] !== Infinity) {
+          maxDistance = Math.max(maxDistance, distances[i.id][j.id]);
+        }
+      });
+    });
+
+    return maxDistance;
+  };
+
+  const handleDiameterMetric = () => {
+    setShowDiameter(!showDiameter);
+    if (!showDiameter && networkData) {
+      const diameter = calculateDiameter(networkData.nodes, networkData.links);
+      setDiameterValue(diameter);
+    }
+  };
+
   const filteredNodes = networkData
     ? networkData.nodes.filter((node) =>
         node.id.toLowerCase().includes(filter.toLowerCase())
@@ -532,7 +583,8 @@ const Home = () => {
                             (metric === "Degree" && showDegree) ||
                             (metric === "Betweenness" && showBetweenness) ||
                             (metric === "Closeness" && showCloseness) ||
-                            (metric === "Density" && showDensity)
+                            (metric === "Density" && showDensity) ||
+                            (metric === "Diameter" && showDiameter)
                               ? "active"
                               : ""
                           }`}
@@ -542,6 +594,7 @@ const Home = () => {
                               handleBetweennessMetric();
                             if (metric === "Closeness") handleClosenessMetric();
                             if (metric === "Density") handleDensityMetric();
+                            if (metric === "Diameter") handleDiameterMetric();
                           }}
                         >
                           {metric}
@@ -553,11 +606,19 @@ const Home = () => {
               </Col>
               {/* Graph Display */}
               <Col lg={9} md={12} className="graph-area">
-                {showDensity && (
+                {(showDensity || showDiameter) && (
                   <Card className="density-card">
-                    <h5 className="fw-bold">Graph Density: {densityValue}</h5>
+                    {showDensity && (
+                      <h5 className="fw-bold">Graph Density: {densityValue}</h5>
+                    )}
+                    {showDiameter && (
+                      <h5 className="fw-bold">
+                        Graph Diameter: {diameterValue}
+                      </h5>
+                    )}
                   </Card>
                 )}
+
                 <Card className="graph-card">
                   {/* <span
                     className="position-absolute top-0 end-0 p-2 text-muted"
@@ -573,7 +634,8 @@ const Home = () => {
                             showDegree ||
                             showBetweenness ||
                             showCloseness ||
-                            showDensity
+                            showDensity ||
+                            showDiameter
                           }
                           graphData={{
                             nodes: filteredNodes,
