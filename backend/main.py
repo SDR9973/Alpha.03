@@ -283,6 +283,7 @@ async def analyze_network(
         start = datetime.strptime(start_date, "%Y-%m-%d") if start_date else None
         end = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
         keyword_list = [kw.strip().lower() for kw in keywords.split(",")] if keywords else []
+        selected_user_list = [user.strip().lower() for user in selected_users.split(",")] if selected_users else []
 
         print(f"Analyzing file: {file_path} with range {start} to {end}")
 
