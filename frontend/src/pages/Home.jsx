@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Bar } from "react-chartjs-2";
-import { Container, Row, Col, Form, Button, Card } from "react-bootstrap";
+import { Container, Row, Col, Form,Table, Button, Card } from "react-bootstrap";
 import {
   Upload,
   Save,
@@ -40,6 +40,8 @@ const Home = () => {
   const [densityValue, setDensityValue] = useState(0);
   const [showDiameter, setShowDiameter] = useState(false);
   const [diameterValue, setDiameterValue] = useState(0);
+  const [showNetworkStats, setShowNetworkStats] = useState(false);
+  const [networkStats, setNetworkStats] = useState({});
   const forceGraphRef = useRef(null);
 
   const graphMetrics = [
@@ -67,7 +69,10 @@ const Home = () => {
         forceGraphRef.current.zoomToFit(400, 100);
       }
     }
-  }, [uploadedFile, showMetrics]);
+    if (networkData) {
+      calculateNetworkStats();
+    }
+  }, [uploadedFile, showMetrics, networkData]);
 
   const handleFileChange = (event) => {
     const selectedFile = event.target.files[0];
@@ -193,7 +198,38 @@ const Home = () => {
       })
       .catch(() => setMessage("An error occurred while saving the form."));
   };
+  const calculateNetworkStats = () => {
+    if (!networkData) return;
 
+    const { nodes, links } = networkData;
+    const numNodes = nodes.length;
+    const numEdges = links.length;
+    const inDegreeMap = {};
+    const outDegreeMap = {};
+    let reciprocalEdges = 0;
+
+    links.forEach((link) => {
+      inDegreeMap[link.target] = (inDegreeMap[link.target] || 0) + 1;
+      outDegreeMap[link.source] = (outDegreeMap[link.source] || 0) + 1;
+
+      if (
+        links.some((l) => l.source === link.target && l.target === link.source)
+      ) {
+        reciprocalEdges++;
+      }
+    });
+
+    const reciprocity =
+      numEdges > 0 ? (reciprocalEdges / numEdges).toFixed(2) : 0;
+
+    setNetworkStats({
+      numNodes,
+      numEdges,
+      reciprocity,
+      inDegreeMap,
+      outDegreeMap,
+    });
+  };
   const calculateNodeDegree = (nodes, links) => {
     const degreeMap = {};
     nodes.forEach((node) => (degreeMap[node.id] = 0));
@@ -418,9 +454,8 @@ const Home = () => {
                 key={inputKey}
                 style={{ display: "none" }}
               />
-              {/* {file && <p className="mt-2">Selected File: {file.name}</p>} */}
               {message && (
-                <AlertBox success={message.includes("successfully")}>
+                <AlertBox success={message.includes("successfully").toString()}>
                   {message}
                 </AlertBox>
               )}
@@ -550,6 +585,7 @@ const Home = () => {
               </div>
             )}
           </Card>
+
           {uploadedFile && (
             <Row className="mt-4">
               <Col
@@ -603,7 +639,59 @@ const Home = () => {
                     </div>
                   )}
                 </Card>
+                <Card className="metrics-card">
+                  <h4 className="fw-bold d-flex justify-content-between align-items-center">
+                    Network Metrics
+                    <Button
+                      variant="link"
+                      onClick={() => setShowNetworkStats(!showNetworkStats)}
+                    >
+                      {showNetworkStats ? (
+                        <ChevronUp size={20} />
+                      ) : (
+                        <ChevronDown size={20} />
+                      )}
+                    </Button>
+                  </h4>
+                  {showNetworkStats && (
+                    <div className="mt-2">
+                      <p>
+                        <strong>Nodes:</strong> {networkStats.numNodes}
+                      </p>
+                      <p>
+                        <strong>Edges:</strong> {networkStats.numEdges}
+                      </p>
+                      <p>
+                        <strong>Reciprocity:</strong> {networkStats.reciprocity}
+                      </p>
+                      <h5 className="fw-bold mt-3">Top Nodes by Degree</h5>
+                      <Table striped bordered hover size="sm">
+                        <thead>
+                          <tr>
+                            <th>Node ID</th>
+                            <th>In-Degree</th>
+                            <th>Out-Degree</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Object.keys(networkStats.inDegreeMap || {})
+                            .slice(0, 10)
+                            .map((nodeId) => (
+                              <tr key={nodeId}>
+                                <td>{nodeId}</td>
+                                <td>{networkStats.inDegreeMap[nodeId] || 0}</td>
+                                <td>
+                                  {networkStats.outDegreeMap[nodeId] || 0}
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </Table>
+                    </div>
+                  )}
+                </Card>
               </Col>
+
               {/* Graph Display */}
               <Col lg={9} md={12} className="graph-area">
                 {(showDensity || showDiameter) && (
