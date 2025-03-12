@@ -51,6 +51,8 @@ const Home = () => {
   const [networkStats, setNetworkStats] = useState({});
   const [minMessageLength, setMinMessageLength] = useState(10);
   const [maxMessageLength, setMaxMessageLength] = useState(100);
+  const [usernameFilter, setUsernameFilter] = useState("");
+
   const forceGraphRef = useRef(null);
 
   const graphMetrics = [
@@ -163,6 +165,7 @@ const Home = () => {
     if (minMessageLength) params.append("min_length", minMessageLength);
     if (maxMessageLength) params.append("max_length", maxMessageLength);
     if (keywords) params.append("keywords", keywords);
+    if (usernameFilter) params.append("username", usernameFilter);
     url += `?${params.toString()}`;
     console.log("Request URL:", url);
     fetch(url)
@@ -595,6 +598,20 @@ const Home = () => {
                         value={keywords}
                         onChange={handleInputChange(setKeywords)}
                         placeholder="Enter keywords, separated by commas"
+                        className="research-input"
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col lg={4} md={4} className="mb-3">
+                    <Form.Group>
+                      <Form.Label className="research-label">
+                        Filter by Username:
+                      </Form.Label>
+                      <Form.Control
+                        type="text"
+                        value={usernameFilter}
+                        onChange={(e) => setUsernameFilter(e.target.value)}
+                        placeholder="Enter username"
                         className="research-input"
                       />
                     </Form.Group>

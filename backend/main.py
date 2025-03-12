@@ -260,7 +260,8 @@ async def analyze_network(
     limit: int = Query(None),  
     min_length: int = Query(None),  
     max_length: int = Query(None),
-    keywords: str = Query(None)
+    keywords: str = Query(None),
+    username: str = Query(None)
 ):
     try:
         # בדיקה אם הקובץ קיים
@@ -321,6 +322,9 @@ async def analyze_network(
                         message_length = len(message_content)
                         if (min_length and message_length < min_length) or (max_length and message_length > max_length):
                             continue 
+                        
+                        if username and sender.lower() != username.lower(): 
+                            continue
                         
                         if keywords and not any(kw in message_content.lower() for kw in keyword_list):
                             continue  
