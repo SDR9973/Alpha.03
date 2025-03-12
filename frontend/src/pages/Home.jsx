@@ -35,7 +35,6 @@ const Home = () => {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [messageLimit, setMessageLimit] = useState(50);
-  const [messageLength, setMessageLength] = useState(100);
   const [keywords, setKeywords] = useState("");
   const [inputKey, setInputKey] = useState(Date.now());
   const [showFilters, setShowFilters] = useState(true);
@@ -52,6 +51,10 @@ const Home = () => {
   const [minMessageLength, setMinMessageLength] = useState(10);
   const [maxMessageLength, setMaxMessageLength] = useState(100);
   const [usernameFilter, setUsernameFilter] = useState("");
+  const [minMessages, setMinMessages] = useState("");
+  const [maxMessages, setMaxMessages] = useState("");
+  const [activeUsers, setActiveUsers] = useState("");
+  const [selectedUsers, setSelectedUsers] = useState("");
 
   const forceGraphRef = useRef(null);
 
@@ -72,7 +75,6 @@ const Home = () => {
       setStartDate("");
       setEndDate("");
       setMessageLimit(50);
-      setMessageLength(100);
       setKeywords("");
       setInputKey(Date.now());
       if (forceGraphRef.current) {
@@ -145,7 +147,6 @@ const Home = () => {
         setStartDate("");
         setEndDate("");
         setMessageLimit(50);
-        setMessageLength(100);
         setKeywords("");
         setInputKey(Date.now());
       } else {
@@ -166,6 +167,10 @@ const Home = () => {
     if (maxMessageLength) params.append("max_length", maxMessageLength);
     if (keywords) params.append("keywords", keywords);
     if (usernameFilter) params.append("username", usernameFilter);
+    if (minMessages) params.append("min_messages", minMessages);
+    if (maxMessages) params.append("max_messages", maxMessages);
+    if (activeUsers) params.append("active_users", activeUsers);
+    if (selectedUsers) params.append("selected_users", selectedUsers);
     url += `?${params.toString()}`;
     console.log("Request URL:", url);
     fetch(url)
@@ -616,6 +621,62 @@ const Home = () => {
                       />
                     </Form.Group>
                   </Col>
+                  <Col lg={4} md={4} className="mb-3">
+                    <Form.Group>
+                      <Form.Label className="research-label">
+                        Min Messages:
+                      </Form.Label>
+                      <Form.Control
+                        type="number"
+                        value={minMessages}
+                        onChange={(e) => setMinMessages(e.target.value)}
+                        placeholder="Enter min messages"
+                        className="research-input"
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col lg={4} md={4} className="mb-3">
+                    <Form.Group>
+                      <Form.Label className="research-label">
+                        Max Messages:
+                      </Form.Label>
+                      <Form.Control
+                        type="number"
+                        value={maxMessages}
+                        onChange={(e) => setMaxMessages(e.target.value)}
+                        placeholder="Enter max messages"
+                        className="research-input"
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col lg={4} md={4} className="mb-3">
+                    <Form.Group>
+                      <Form.Label className="research-label">
+                        Top Active Users:
+                      </Form.Label>
+                      <Form.Control
+                        type="number"
+                        value={activeUsers}
+                        onChange={(e) => setActiveUsers(e.target.value)}
+                        placeholder="Number of top active users"
+                        className="research-input"
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col lg={12} className="mb-3">
+                    <Form.Group>
+                      <Form.Label className="research-label">
+                        Specific Users:
+                      </Form.Label>
+                      <Form.Control
+                        type="text"
+                        value={selectedUsers}
+                        onChange={(e) => setSelectedUsers(e.target.value)}
+                        placeholder="Enter usernames, separated by commas"
+                        className="research-input"
+                      />
+                    </Form.Group>
+                  </Col>
                 </Row>
                 <Row className="align-items-center justify-content-between">
                   <Col>
@@ -866,7 +927,7 @@ const Home = () => {
                             if (showBetweenness) {
                               ctx.fillStyle = "DarkRed";
                               ctx.fillText(
-                                `Btw: ${node.betweenness.toFixed(2)}`,
+                                `Btw: ${node.betweenness?.toFixed(2) || 0}`,
                                 node.x,
                                 node.y + radius + 35
                               );
@@ -874,11 +935,20 @@ const Home = () => {
                             if (showCloseness) {
                               ctx.fillStyle = "green";
                               ctx.fillText(
-                                `Cls: ${node.closeness.toFixed(2)}`,
+                                `Cls: ${node.closeness?.toFixed(2) || 0}`,
                                 node.x,
                                 node.y + radius + 50
                               );
                             }
+                            if ((minMessages || maxMessages) && node.messages) {
+                              ctx.fillStyle = "blue";
+                              ctx.fillText(
+                                `Msg: ${node.messages}`,
+                                node.x,
+                                node.y + radius + 65
+                              );
+                            }
+
                             ctx.restore();
                           }}
                         />

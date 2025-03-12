@@ -261,7 +261,11 @@ async def analyze_network(
     min_length: int = Query(None),  
     max_length: int = Query(None),
     keywords: str = Query(None),
-    username: str = Query(None)
+    min_messages: int = Query(None), 
+    max_messages: int = Query(None), 
+    active_users: int = Query(None), 
+    selected_users: str = Query(None), 
+    username: str = Query(None),
 ):
     try:
         # בדיקה אם הקובץ קיים
@@ -271,6 +275,7 @@ async def analyze_network(
 
         # אובייקטים לאחסון צמתים ומונה הקשרים
         nodes = set()
+        user_message_count = defaultdict(int)
         edges_counter = defaultdict(int)  # מונה הקשרים בין שולחים
         previous_sender = None
 
@@ -329,6 +334,8 @@ async def analyze_network(
                         if keywords and not any(kw in message_content.lower() for kw in keyword_list):
                             continue  
                         
+                        user_message_count[sender] += 1  
+
                         if sender:
                             nodes.add(sender)  # הוספת שולח לצמתים
 
@@ -343,9 +350,17 @@ async def analyze_network(
                 except Exception as e:
                     print(f"Error processing line: {line.strip()} - {e}")
                     continue
-
+        filtered_users = {
+            user: count
+            for user, count in user_message_count.items()
+            if (not min_messages or count >= min_messages) and (not max_messages or count <= max_messages)
+        }
+        
         # יצירת רשימת הצמתים והקשרים עם משקלים
-        nodes_list = [{"id": node} for node in nodes]
+        # nodes_list = [{"id": node} for node in nodes]
+        nodes_list = [{"id": user, "messages": count} for user, count in user_message_count.items()
+                    if (not min_messages or count >= min_messages) and (not max_messages or count <= max_messages)]
+
         links_list = [
             {"source": edge[0], "target": edge[1], "weight": weight}
             for edge, weight in edges_counter.items()
