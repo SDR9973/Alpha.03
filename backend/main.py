@@ -257,7 +257,9 @@ async def analyze_network(
     filename: str,
     start_date: str = Query(None),
     end_date: str = Query(None),
-    limit: int = Query(None)  # פרמטר להגבלת מספר ההודעות
+    limit: int = Query(None),  
+    min_length: int = Query(None),  
+    max_length: int = Query(None)
 ):
     try:
         # בדיקה אם הקובץ קיים
@@ -308,6 +310,15 @@ async def analyze_network(
 
                         # חילוץ השם של השולח
                         sender = message_part.split(":")[0].strip("~").replace(" ", "").strip()
+                        message_content = message_part.split(":", 1)
+
+                        parts = message_part.split(":", 1)
+                        sender = parts[0].strip("~").replace(" ", "").strip()
+                        message_content = parts[1].strip() if len(parts) > 1 else ""  # בדיקה אם יש הודעה
+
+                        message_length = len(message_content)
+                        if (min_length and message_length < min_length) or (max_length and message_length > max_length):
+                            continue 
 
                         if sender:
                             nodes.add(sender)  # הוספת שולח לצמתים

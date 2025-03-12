@@ -1,6 +1,14 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Bar } from "react-chartjs-2";
-import { Container, Row, Col, Form,Table, Button, Card } from "react-bootstrap";
+import {
+  Container,
+  Row,
+  Col,
+  Form,
+  Table,
+  Button,
+  Card,
+} from "react-bootstrap";
 import {
   Upload,
   Save,
@@ -28,7 +36,6 @@ const Home = () => {
   const [endDate, setEndDate] = useState("");
   const [messageLimit, setMessageLimit] = useState(50);
   const [messageLength, setMessageLength] = useState(100);
-  const [responseTime, setResponseTime] = useState(30);
   const [keywords, setKeywords] = useState("");
   const [inputKey, setInputKey] = useState(Date.now());
   const [showFilters, setShowFilters] = useState(true);
@@ -42,6 +49,8 @@ const Home = () => {
   const [diameterValue, setDiameterValue] = useState(0);
   const [showNetworkStats, setShowNetworkStats] = useState(false);
   const [networkStats, setNetworkStats] = useState({});
+  const [minMessageLength, setMinMessageLength] = useState(10);
+  const [maxMessageLength, setMaxMessageLength] = useState(100);
   const forceGraphRef = useRef(null);
 
   const graphMetrics = [
@@ -62,7 +71,6 @@ const Home = () => {
       setEndDate("");
       setMessageLimit(50);
       setMessageLength(100);
-      setResponseTime(30);
       setKeywords("");
       setInputKey(Date.now());
       if (forceGraphRef.current) {
@@ -136,7 +144,6 @@ const Home = () => {
         setEndDate("");
         setMessageLimit(50);
         setMessageLength(100);
-        setResponseTime(30);
         setKeywords("");
         setInputKey(Date.now());
       } else {
@@ -153,6 +160,8 @@ const Home = () => {
     if (startDate) params.append("start_date", startDate);
     if (endDate) params.append("end_date", endDate);
     if (messageLimit) params.append("limit", messageLimit);
+    if (minMessageLength) params.append("min_length", minMessageLength);
+    if (maxMessageLength) params.append("max_length", maxMessageLength);
     url += `?${params.toString()}`;
     console.log("Request URL:", url);
     fetch(url)
@@ -527,7 +536,7 @@ const Home = () => {
                   </Col>
                 </Row>
                 <Row className="mt-3">
-                  <Col lg={4} md={4} className="mb-3">
+                  {/* <Col lg={4} md={4} className="mb-3">
                     <Form.Group>
                       <Form.Label className="research-label">
                         Message Length (Characters):
@@ -541,22 +550,40 @@ const Home = () => {
                         className="research-input"
                       />
                     </Form.Group>
-                  </Col>
-                  <Col lg={4} md={4} className="mb-3">
-                    <Form.Group>
-                      <Form.Label className="research-label">
-                        Response Time (Seconds):
-                      </Form.Label>
-                      <Form.Control
-                        type="number"
-                        min="1"
-                        max="300"
-                        value={responseTime}
-                        onChange={handleInputChange(setResponseTime)}
-                        className="research-input"
-                      />
-                    </Form.Group>
-                  </Col>
+                  </Col> */}
+                  <Row className="mt-3">
+                    <Col lg={6} md={6} className="mb-3">
+                      <Form.Group>
+                        <Form.Label className="research-label">
+                          Min Message Length:
+                        </Form.Label>
+                        <Form.Control
+                          type="number"
+                          min="1"
+                          max="1000"
+                          value={minMessageLength}
+                          onChange={handleInputChange(setMinMessageLength)}
+                          className="research-input"
+                        />
+                      </Form.Group>
+                    </Col>
+                    <Col lg={6} md={6} className="mb-3">
+                      <Form.Group>
+                        <Form.Label className="research-label">
+                          Max Message Length:
+                        </Form.Label>
+                        <Form.Control
+                          type="number"
+                          min="1"
+                          max="1000"
+                          value={maxMessageLength}
+                          onChange={handleInputChange(setMaxMessageLength)}
+                          className="research-input"
+                        />
+                      </Form.Group>
+                    </Col>
+                  </Row>
+
                   <Col lg={4} md={4} className="mb-3">
                     <Form.Group>
                       <Form.Label className="research-label">
