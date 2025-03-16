@@ -28,7 +28,7 @@ app = FastAPI()
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5174"],
+    allow_origins=["http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -252,12 +252,172 @@ async def delete_file(filename: str):
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
+def anonymize_name(name, anonymized_map):
+    """ ממיר שם או מספר טלפון למזהה אנונימי ייחודי """
+    if name.startswith("\u202a+972") or name.startswith("+972"):
+        name = f"Phone_{len(anonymized_map) + 1}"
+    if name not in anonymized_map:
+        anonymized_map[name] = f"User_{len(anonymized_map) + 1}"
+    return anonymized_map[name]
+
+
+
+def parse_datetime(date: str, time: str):
+    """Parses date & time from the request query and ensures HH:MM:SS format."""
+    if not date:
+        return None
+    if time and len(time) == 5:  # If time is in HH:MM format, add ":00"
+        time += ":00"
+    try:
+        return datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M:%S")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid time format: {time} - {e}")
+
+
+
+# @app.get("/analyze/network/{filename}")
+# async def analyze_network(
+#     filename: str,
+#     start_date: str = Query(None),
+#     start_time: str = Query(None),
+#     end_date: str = Query(None),
+#     end_time: str = Query(None),
+#     limit: int = Query(None),  
+#     limit_type: str = Query("first"),  
+#     min_length: int = Query(None),  
+#     max_length: int = Query(None),
+#     keywords: str = Query(None),
+#     min_messages: int = Query(None), 
+#     max_messages: int = Query(None), 
+#     active_users: int = Query(None), 
+#     selected_users: str = Query(None), 
+#     username: str = Query(None),
+#     anonymize: bool = Query(False)
+# ):
+#     try:
+#         print(f"Analyzing file: {filename}, Anonymization: {anonymize}, Limit Type: {limit_type}")
+#         file_path = os.path.join(UPLOAD_FOLDER, filename)
+#         if not os.path.exists(file_path):
+#             return JSONResponse(content={"error": f"File '{filename}' not found."}, status_code=404)
+
+#         nodes = set()
+#         user_message_count = defaultdict(int)
+#         edges_counter = defaultdict(int)
+#         previous_sender = None
+#         anonymized_map = {}  # מילון לאנונימיזציה
+
+#         keyword_list = [kw.strip().lower() for kw in keywords.split(",")] if keywords else []
+#         selected_user_list = [user.strip().lower() for user in selected_users.split(",")] if selected_users else []
+
+#          # עיבוד תאריכים
+#         start_datetime = None
+#         end_datetime = None
+
+#         if start_date and start_time:
+#             start_datetime = datetime.strptime(f"{start_date} {start_time}", "%Y-%m-%d %H:%M:%S")
+#         elif start_date:
+#             start_datetime = datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S")
+
+#         if end_date and end_time:
+#             end_datetime = datetime.strptime(f"{end_date} {end_time}", "%Y-%m-%d %H:%M:%S")
+#         elif end_date:
+#             end_datetime = datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S")
+
+#         print(f"🔹 Converted: start_datetime={start_datetime}, end_datetime={end_datetime}")
+
+
+
+#         count = 0
+#         with open(file_path, "r", encoding="utf-8") as f:
+#             lines = f.readlines()
+        
+#          # סינון לפי תאריכים
+#         filtered_lines = []
+#         for line in lines:
+#             if line.startswith("[") and "]" in line:
+#                 date_part = line.split("] ")[0].strip("[]")
+#                 try:
+#                     current_datetime = datetime.strptime(date_part, "%d.%m.%Y, %H:%M:%S")
+#                 except ValueError:
+#                     continue  # דילוג על שורות לא תקינות
+
+#                 if start_datetime and end_datetime and start_datetime <= current_datetime <= end_datetime:
+#                     filtered_lines.append(line)
+
+#         print(f"🔹 Found {len(filtered_lines)} messages in the date range.")
+
+#         # יישום מגבלת limit אחרי הסינון!
+#         if limit and limit_type == "first":
+#             selected_lines = filtered_lines[:limit]
+#         elif limit and limit_type == "last":
+#             selected_lines = filtered_lines[-limit:]
+#         else:
+#             selected_lines = filtered_lines
+
+#         print(f"🔹 Processing {len(selected_lines)} messages (Limit Type: {limit_type})")
+
+
+
+
+#         # יישום מגבלת limit אחרי הסינון!
+#         if limit and limit_type == "first":
+#             selected_lines = filtered_lines[:limit]
+#         elif limit and limit_type == "last":
+#             selected_lines = filtered_lines[-limit:]
+#         else:
+#             selected_lines = filtered_lines
+
+#         print(f"🔹 Processing {len(selected_lines)} messages (Limit Type: {limit_type})")
+
+#         for line in selected_lines:
+#             try:
+#                 if "הושמטה" in line or "הושמט" in line:
+#                     continue
+                
+#                 if line.startswith("[") and "]" in line and ": " in line:
+#                     _, message_part = line.split("] ", 1)
+#                     sender = message_part.split(":")[0].strip("~").replace("\u202a", "").strip()
+                    
+#                     if sender:
+#                         if anonymize:
+#                             sender = anonymize_name(sender, anonymized_map)
+                        
+#                         nodes.add(sender)
+#                         if previous_sender and previous_sender != sender:
+#                             edge = tuple(sorted([previous_sender, sender]))
+#                             edges_counter[edge] += 1
+#                         previous_sender = sender
+#             except Exception as e:
+#                 print(f"Error processing line: {line.strip()} - {e}")
+#                 continue
+
+#         nodes_list = [{"id": anonymize_name(node, anonymized_map) if anonymize else node} for node in nodes]
+        
+#         links_list = [
+#             {"source": anonymized_map.get(edge[0], edge[0]) if anonymize else edge[0], 
+#              "target": anonymized_map.get(edge[1], edge[1]) if anonymize else edge[1],
+#              "weight": weight}
+#             for edge, weight in edges_counter.items()
+#         ]
+
+#         print(f"Final nodes: {nodes_list}")
+#         print(f"Final links with weights: {links_list}")
+
+#         return JSONResponse(content={"nodes": nodes_list, "links": links_list}, status_code=200)
+#     except Exception as e:
+#         print("Error:", e)
+#         return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
 @app.get("/analyze/network/{filename}")
 async def analyze_network(
     filename: str,
     start_date: str = Query(None),
+    start_time: str = Query(None),
     end_date: str = Query(None),
+    end_time: str = Query(None),
     limit: int = Query(None),  
+    limit_type: str = Query("first"),  
     min_length: int = Query(None),  
     max_length: int = Query(None),
     keywords: str = Query(None),
@@ -266,95 +426,108 @@ async def analyze_network(
     active_users: int = Query(None), 
     selected_users: str = Query(None), 
     username: str = Query(None),
+    anonymize: bool = Query(False)
 ):
     try:
-        # בדיקה אם הקובץ קיים
+        print(f"Analyzing file: {filename}, Anonymization: {anonymize}, Limit Type: {limit_type}")
         file_path = os.path.join(UPLOAD_FOLDER, filename)
         if not os.path.exists(file_path):
             return JSONResponse(content={"error": f"File '{filename}' not found."}, status_code=404)
 
-        # אובייקטים לאחסון צמתים ומונה הקשרים
         nodes = set()
         user_message_count = defaultdict(int)
-        edges_counter = defaultdict(int)  # מונה הקשרים בין שולחים
+        edges_counter = defaultdict(int)
         previous_sender = None
+        anonymized_map = {}  # מילון לאנונימיזציה
 
-        # המרת טווח תאריכים אם הוזנו
-        start = datetime.strptime(start_date, "%Y-%m-%d") if start_date else None
-        end = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
         keyword_list = [kw.strip().lower() for kw in keywords.split(",")] if keywords else []
         selected_user_list = [user.strip().lower() for user in selected_users.split(",")] if selected_users else []
 
-        print(f"Analyzing file: {file_path} with range {start} to {end}")
+        # עיבוד תאריכים
+        start_datetime = None
+        end_datetime = None
 
-        count = 0  # מונה הודעות
-        # קריאת הקובץ
+        if start_date and start_time:
+            start_datetime = datetime.strptime(f"{start_date} {start_time}", "%Y-%m-%d %H:%M:%S")
+        elif start_date:
+            start_datetime = datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S")
+
+        if end_date and end_time:
+            end_datetime = datetime.strptime(f"{end_date} {end_time}", "%Y-%m-%d %H:%M:%S")
+        elif end_date:
+            end_datetime = datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S")
+
+        print(f"🔹 Converted: start_datetime={start_datetime}, end_datetime={end_datetime}")
+
         with open(file_path, "r", encoding="utf-8") as f:
-            for line in f:
+            lines = f.readlines()
+        
+        # סינון לפי תאריכים
+        filtered_lines = []
+        for line in lines:
+            if line.startswith("[") and "]" in line:
+                date_part = line.split("] ")[0].strip("[]")
                 try:
-                    # עצירת הלולאה אם הגענו למגבלת הודעות
-                    if limit and count >= limit:
-                        break
+                    current_datetime = datetime.strptime(date_part, "%d.%m.%Y, %H:%M:%S")
+                except ValueError:
+                    continue  # דילוג על שורות לא תקינות
 
-                    # דילוג על הודעות "הושמטה"
-                    if "הושמטה" in line or "הושמט" in line:
-                        continue
+                if ((start_datetime and current_datetime >= start_datetime) or not start_datetime) and \
+                   ((end_datetime and current_datetime <= end_datetime) or not end_datetime):
+                    filtered_lines.append(line)
 
-                    # בדיקה שהשורה בפורמט הודעת וואטסאפ
-                    if line.startswith("[") and "]" in line and ": " in line:
-                        date_part, message_part = line.split("] ", 1)
-                        date_str = date_part.strip("[]").split(",")[0]
+        print(f"🔹 Found {len(filtered_lines)} messages in the date range.")
 
-                        # המרת התאריך לפורמט datetime
-                        try:
-                            current_date = datetime.strptime(date_str, "%d.%m.%Y")
-                        except ValueError:
-                            print(f"Invalid date format in line: {line.strip()}") 
-                            continue
+        # יישום מגבלת limit אחרי הסינון!
+        if limit and limit_type == "first":
+            selected_lines = filtered_lines[:limit]
+        elif limit and limit_type == "last":
+            selected_lines = filtered_lines[-limit:]
+        else:
+            selected_lines = filtered_lines
 
-                        # סינון לפי טווח תאריכים
-                        if start and end:
-                            if not (start <= current_date <= end):
-                                continue  # מחוץ לטווח
+        print(f"🔹 Processing {len(selected_lines)} messages (Limit Type: {limit_type})")
 
-                        # חילוץ השם של השולח
-                        sender = message_part.split(":")[0].strip("~").replace(" ", "").strip()
-                        message_content = message_part.split(":", 1)
-
-                        parts = message_part.split(":", 1)
-                        sender = parts[0].strip("~").replace(" ", "").strip()
-                        message_content = parts[1].strip() if len(parts) > 1 else ""  # בדיקה אם יש הודעה
-
-                        message_length = len(message_content)
-                        if (min_length and message_length < min_length) or (max_length and message_length > max_length):
-                            continue 
-                        
-                        if username and sender.lower() != username.lower(): 
-                            continue
-                        
-                        if keywords and not any(kw in message_content.lower() for kw in keyword_list):
-                            continue  
-                        
-                        user_message_count[sender] += 1  
-
-                        if sender:
-                            nodes.add(sender)  # הוספת שולח לצמתים
-
-                            # חישוב כמות הקשרים בין שולחים
-                            if previous_sender and previous_sender != sender:
-                                edge = tuple(sorted([previous_sender, sender]))  # שמירת זוג מסודר
-                                edges_counter[edge] += 1
-                            previous_sender = sender
-
-                            count += 1  # ספירת הודעה שנכללה
-
-                except Exception as e:
-                    print(f"Error processing line: {line.strip()} - {e}")
+        for line in selected_lines:
+            try:
+                if "הושמטה" in line or "הושמט" in line:
                     continue
                 
+                if line.startswith("[") and "]" in line and ": " in line:
+                    _, message_part = line.split("] ", 1)
+                    parts = message_part.split(":", 1)
+                    sender = parts[0].strip("~").replace("\u202a", "").strip()
+                    message_content = parts[1].strip() if len(parts) > 1 else ""
+                    
+                    # פילטרים חדשים שהוספנו
+                    message_length = len(message_content)
+                    if (min_length and message_length < min_length) or (max_length and message_length > max_length):
+                        continue
+                    
+                    if username and sender.lower() != username.lower():
+                        continue
+                    
+                    if keywords and not any(kw in message_content.lower() for kw in keyword_list):
+                        continue
+                    
+                    user_message_count[sender] += 1
+                    
+                    if sender:
+                        if anonymize:
+                            sender = anonymize_name(sender, anonymized_map)
+                        
+                        nodes.add(sender)
+                        if previous_sender and previous_sender != sender:
+                            edge = tuple(sorted([previous_sender, sender]))
+                            edges_counter[edge] += 1
+                        previous_sender = sender
+            except Exception as e:
+                print(f"Error processing line: {line.strip()} - {e}")
+                continue
+
+        # פילטרים נוספים לאחר העיבוד הראשוני
         filtered_users = {
-            user: count
-            for user, count in user_message_count.items()
+            user: count for user, count in user_message_count.items()
             if (not min_messages or count >= min_messages) and (not max_messages or count <= max_messages)
         }
         
@@ -363,24 +536,43 @@ async def analyze_network(
             filtered_users = dict(sorted_users)
         
         if selected_users:
-            filtered_users = {user: count for user, count in filtered_users.items() if user.lower() in selected_user_list}
-    
-        # יצירת רשימת הצמתים והקשרים עם משקלים
-        # nodes_list = [{"id": node} for node in nodes]
-        nodes_list = [{"id": user, "messages": count} for user, count in filtered_users.items()]
+            filtered_users = {user: count for user, count in filtered_users.items() 
+                             if user.lower() in selected_user_list}
+        
+        # עדכון רשימת הצמתים בהתאם לפילטרים
+        filtered_nodes = set(filtered_users.keys())
+        if anonymize:
+            filtered_nodes = {anonymize_name(node, anonymized_map) for node in filtered_nodes}
+        
+        # יצירת רשימת הצמתים עם ספירת ההודעות
+        nodes_list = []
+        for node in filtered_nodes:
+            original_node = next((k for k, v in anonymized_map.items() if v == node), node) if anonymize else node
+            nodes_list.append({
+                "id": node,
+                "messages": user_message_count[original_node]
+            })
+            
+        # יצירת רשימת הקשרים רק עבור הצמתים המסוננים
+        links_list = []
+        for edge, weight in edges_counter.items():
+            source, target = edge
+            
+            if anonymize:
+                source = anonymized_map.get(source, source)
+                target = anonymized_map.get(target, target)
+            
+            if source in filtered_nodes and target in filtered_nodes:
+                links_list.append({
+                    "source": source,
+                    "target": target,
+                    "weight": weight
+                })
 
+        print(f"Final nodes: {nodes_list}")
+        print(f"Final links with weights: {links_list}")
 
-        links_list = [
-            {"source": edge[0], "target": edge[1], "weight": weight}
-            for edge, weight in edges_counter.items()
-        ]
-
-        print("Final nodes:", nodes_list)
-        print("Final links with weights:", links_list)
-
-        # החזרת JSON עם צמתים וקשרים
         return JSONResponse(content={"nodes": nodes_list, "links": links_list}, status_code=200)
-
     except Exception as e:
         print("Error:", e)
         return JSONResponse(content={"error": str(e)}, status_code=500)

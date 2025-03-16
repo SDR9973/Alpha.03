@@ -22,6 +22,8 @@ import { ForceGraph2D } from "react-force-graph";
 import "./Home.css";
 // Import custom styles
 import { AlertBox, GraphContainer } from "./Form.style.js";
+import AnonymizationToggle from "../components/AnonymizationToggle.jsx";
+
 const Home = () => {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -55,6 +57,10 @@ const Home = () => {
   const [maxMessages, setMaxMessages] = useState("");
   const [activeUsers, setActiveUsers] = useState("");
   const [selectedUsers, setSelectedUsers] = useState("");
+  const [isAnonymized, setIsAnonymized] = useState(false);
+  const [endTime, setEndTime] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [limitType, setLimitType] = useState("first"); // Default limit type is 'first'
 
   const forceGraphRef = useRef(null);
 
@@ -112,9 +118,12 @@ const Home = () => {
     }
     const formData = new FormData();
     formData.append("file", selectedFile);
-    fetch("http://localhost:8000/upload", {
+    fetch("http://localhost:8001/upload", {
       method: "POST",
       body: formData,
+      headers: {
+        "Accept": "application/json",
+    }
     })
       .then((response) => response.json())
       .then((data) => {
@@ -133,7 +142,7 @@ const Home = () => {
     }
     try {
       const response = await fetch(
-        `http://localhost:8000/delete/${uploadedFile}`,
+        `http://localhost:8001/delete/${uploadedFile}`,
         { method: "DELETE" }
       );
       const data = await response.json();
@@ -157,8 +166,12 @@ const Home = () => {
     }
   };
 
+  const formatTime = (time) => {
+    return time && time.length === 5 ? `${time}:00` : time;
+  };
+
   const handleNetworkAnalysis = () => {
-    let url = `http://localhost:8000/analyze/network/${uploadedFile}`;
+    let url = `http://localhost:8001/analyze/network/${uploadedFile}`;
     const params = new URLSearchParams();
     if (startDate) params.append("start_date", startDate);
     if (endDate) params.append("end_date", endDate);
@@ -171,7 +184,12 @@ const Home = () => {
     if (maxMessages) params.append("max_messages", maxMessages);
     if (activeUsers) params.append("active_users", activeUsers);
     if (selectedUsers) params.append("selected_users", selectedUsers);
-    
+    if (startTime) params.append("start_time", formatTime(startTime));
+    if (endTime) params.append("end_time", formatTime(endTime));
+    if (limitType) params.append("limit_type", limitType); // Ensure correct type is sent!
+
+    params.append("anonymize", isAnonymized ? "true" : "false");
+
     url += `?${params.toString()}`;
     console.log("Request URL:", url);
     fetch(url)
@@ -456,6 +474,12 @@ const Home = () => {
                   className="research-input"
                 />
               </Form.Group>
+              <div>
+                <AnonymizationToggle
+                  isAnonymized={isAnonymized}
+                  setIsAnonymized={setIsAnonymized}
+                />
+              </div>
             </Col>
             <Col
               lg={4}
@@ -532,6 +556,33 @@ const Home = () => {
                   <Col lg={4} md={4} className="mb-3">
                     <Form.Group>
                       <Form.Label className="research-label">
+                        Start Time:
+                      </Form.Label>
+                      <Form.Control
+                        type="time"
+                        value={startTime}
+                        onChange={(e) => setStartTime(e.target.value)}
+                        className="research-input"
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col lg={4} md={4} className="mb-3">
+                    <Form.Group>
+                      <Form.Label className="research-label">
+                        End Time:
+                      </Form.Label>
+                      <Form.Control
+                        type="time"
+                        value={endTime}
+                        onChange={(e) => setEndTime(e.target.value)}
+                        className="research-input"
+                      />
+                    </Form.Group>
+                  </Col>
+
+                  <Col lg={4} md={4} className="mb-3">
+                    <Form.Group>
+                      <Form.Label className="research-label">
                         Message Limit:
                       </Form.Label>
                       <Form.Control
@@ -542,8 +593,26 @@ const Home = () => {
                         onChange={handleInputChange(setMessageLimit)}
                         className="research-input"
                       />
+                    
                     </Form.Group>
                   </Col>
+                  <Col lg={4} md={4} className="mb-3">
+                    <Form.Group>
+                    <Form.Label className="research-label">
+                        Last/First Limit:
+                      </Form.Label>
+                    <select
+                        value={limitType}
+                        onChange={(e) => setLimitType(e.target.value)}
+                        className="research-input"
+                      >
+                        <option value="first">First Messages</option>
+                        <option value="last">Last Messages</option>
+                        <option value="all">All Messages</option>
+                      </select>
+                    </Form.Group>
+                  </Col>
+
                 </Row>
                 <Row className="mt-3">
                   {/* <Col lg={4} md={4} className="mb-3">
