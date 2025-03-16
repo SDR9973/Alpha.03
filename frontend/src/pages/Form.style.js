@@ -37,6 +37,7 @@ export const Input = styled.input`
   padding: 10px;
   border: 1px solid #ccc;
   border-radius: 8px;
+  color: black;
   font-size: 1rem;
   background-color: #f9f9f9;
 `;
@@ -59,8 +60,9 @@ export const Button = styled.button`
 `;
 
 export const AlertBox = styled.div`
-  margin: 20px 0;
-  padding: 15px;
+  margin: 15px 0;
+  padding: 5px;
+  font-size: 12px;
   background-color: ${(props) => (props.success ? "#d4edda" : "#f8d7da")};
   color: ${(props) => (props.success ? "#155724" : "#721c24")};
   border: 1px solid ${(props) => (props.success ? "#c3e6cb" : "#f5c6cb")};
@@ -69,15 +71,12 @@ export const AlertBox = styled.div`
 
 export const GraphContainer = styled.div`
   width: 100%; /* Ensures it takes the full width of the parent */
-  height: 400px; /* Set a fixed or relative height */
   margin: 0 auto;
   border: 1px solid lightgray;
   border-radius: 8px;
   overflow: hidden; /* Prevents overflow */
   position: relative;
-  background-color: #f9f9f9; /* Optional background for clarity */
   display: flex; /* Ensure content is centered */
   justify-content: center;
   align-items: center;
 `;
-

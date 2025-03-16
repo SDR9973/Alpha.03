@@ -257,7 +257,15 @@ async def analyze_network(
     filename: str,
     start_date: str = Query(None),
     end_date: str = Query(None),
-    limit: int = Query(None)  # פרמטר להגבלת מספר ההודעות
+    limit: int = Query(None),  
+    min_length: int = Query(None),  
+    max_length: int = Query(None),
+    keywords: str = Query(None),
+    min_messages: int = Query(None), 
+    max_messages: int = Query(None), 
+    active_users: int = Query(None), 
+    selected_users: str = Query(None), 
+    username: str = Query(None),
 ):
     try:
         # בדיקה אם הקובץ קיים
@@ -267,12 +275,15 @@ async def analyze_network(
 
         # אובייקטים לאחסון צמתים ומונה הקשרים
         nodes = set()
+        user_message_count = defaultdict(int)
         edges_counter = defaultdict(int)  # מונה הקשרים בין שולחים
         previous_sender = None
 
         # המרת טווח תאריכים אם הוזנו
         start = datetime.strptime(start_date, "%Y-%m-%d") if start_date else None
         end = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
+        keyword_list = [kw.strip().lower() for kw in keywords.split(",")] if keywords else []
+        selected_user_list = [user.strip().lower() for user in selected_users.split(",")] if selected_users else []
 
         print(f"Analyzing file: {file_path} with range {start} to {end}")
 
@@ -308,6 +319,23 @@ async def analyze_network(
 
                         # חילוץ השם של השולח
                         sender = message_part.split(":")[0].strip("~").replace(" ", "").strip()
+                        message_content = message_part.split(":", 1)
+
+                        parts = message_part.split(":", 1)
+                        sender = parts[0].strip("~").replace(" ", "").strip()
+                        message_content = parts[1].strip() if len(parts) > 1 else ""  # בדיקה אם יש הודעה
+
+                        message_length = len(message_content)
+                        if (min_length and message_length < min_length) or (max_length and message_length > max_length):
+                            continue 
+                        
+                        if username and sender.lower() != username.lower(): 
+                            continue
+                        
+                        if keywords and not any(kw in message_content.lower() for kw in keyword_list):
+                            continue  
+                        
+                        user_message_count[sender] += 1  
 
                         if sender:
                             nodes.add(sender)  # הוספת שולח לצמתים
@@ -323,9 +351,25 @@ async def analyze_network(
                 except Exception as e:
                     print(f"Error processing line: {line.strip()} - {e}")
                     continue
-
+                
+        filtered_users = {
+            user: count
+            for user, count in user_message_count.items()
+            if (not min_messages or count >= min_messages) and (not max_messages or count <= max_messages)
+        }
+        
+        if active_users:
+            sorted_users = sorted(filtered_users.items(), key=lambda x: x[1], reverse=True)[:active_users]
+            filtered_users = dict(sorted_users)
+        
+        if selected_users:
+            filtered_users = {user: count for user, count in filtered_users.items() if user.lower() in selected_user_list}
+    
         # יצירת רשימת הצמתים והקשרים עם משקלים
-        nodes_list = [{"id": node} for node in nodes]
+        # nodes_list = [{"id": node} for node in nodes]
+        nodes_list = [{"id": user, "messages": count} for user, count in filtered_users.items()]
+
+
         links_list = [
             {"source": edge[0], "target": edge[1], "weight": weight}
             for edge, weight in edges_counter.items()
