@@ -59,6 +59,8 @@ const Home = () => {
   const [endTime, setEndTime] = useState("");
   const [startTime, setStartTime] = useState("");
   const [limitType, setLimitType] = useState("first");
+  const [originalNetworkData, setOriginalNetworkData] = useState(null);
+  const [strongConnectionsActive, setStrongConnectionsActive] = useState(false);
 
   const forceGraphRef = useRef(null);
 
@@ -198,6 +200,9 @@ const Home = () => {
         console.log("Data returned from server:", data);
         if (data.nodes && data.links) {
           setNetworkData(data);
+        }
+        if (!originalNetworkData) {
+          setOriginalNetworkData(data); // שמירת העותק
         } else {
           setMessage("No data returned from server.");
         }
@@ -359,6 +364,29 @@ const Home = () => {
           filteredNodes.some((node) => node.id === link.target)
       )
     : [];
+
+  const handleStrongConnections = () => {
+    if (!networkData) return;
+
+    if (strongConnectionsActive) {
+      setNetworkData(originalNetworkData);
+      setStrongConnectionsActive(false);
+    } else {
+  
+      const threshold = 0.2; 
+      const filteredNodes = networkData.nodes.filter(
+        (node) => node.betweenness >= threshold
+      );
+      const filteredLinks = networkData.links.filter(
+        (link) =>
+          filteredNodes.some((node) => node.id === link.source) &&
+          filteredNodes.some((node) => node.id === link.target)
+      );
+
+      setNetworkData({ nodes: filteredNodes, links: filteredLinks });
+      setStrongConnectionsActive(true);
+    }
+  };
 
   return (
     <Container fluid className="upload-section">
@@ -731,6 +759,17 @@ const Home = () => {
                           {metric}
                         </Button>
                       ))}
+
+                      <Button
+                        className={`metrics-item ${
+                          strongConnectionsActive ? "active" : ""
+                        }`}
+                        onClick={handleStrongConnections}
+                      >
+                        {strongConnectionsActive
+                          ? "Show All Connections"
+                          : "Strongest Connections"}
+                      </Button>
                     </div>
                   )}
                 </Card>
