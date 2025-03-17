@@ -12,7 +12,8 @@ from jose import jwt, JWTError
 import bcrypt
 import os
 import networkx as nx
-
+import numpy
+import scipy
 
 # Load environment variables
 load_dotenv()
@@ -420,12 +421,14 @@ async def analyze_network(
         if nx.is_connected(G):
             closeness_centrality = nx.closeness_centrality(G)
             eigenvector_centrality = nx.eigenvector_centrality(G, max_iter=1000)
+            pagerank_centrality = nx.pagerank(G, alpha=0.85)
         else:
             largest_cc = max(nx.connected_components(G), key=len)
             G_subgraph = G.subgraph(largest_cc).copy()
             closeness_centrality = nx.closeness_centrality(G_subgraph)
             eigenvector_centrality = nx.eigenvector_centrality(G_subgraph, max_iter=1000)
-            
+            pagerank_centrality = nx.pagerank(G_subgraph, alpha=0.85)
+
         nodes_list = [
             {
                 "id": node,
@@ -434,6 +437,7 @@ async def analyze_network(
                 "betweenness": round(betweenness_centrality.get(node, 0), 4),
                 "closeness": round(closeness_centrality.get(node, 0), 4),
                 "eigenvector": round(eigenvector_centrality.get(node, 0), 4), 
+                "pagerank": round(pagerank_centrality.get(node, 0), 4),
             }
             for node in filtered_nodes
         ]

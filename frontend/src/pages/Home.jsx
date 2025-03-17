@@ -67,6 +67,7 @@ const Home = () => {
     "Betweenness Centrality",
     "Closeness Centrality",
     "Eigenvector Centrality",
+    "PageRank Centrality",
     "Density",
     "Diameter",
   ];
@@ -866,14 +867,16 @@ const Home = () => {
                           nodeCanvasObject={(node, ctx, globalScale) => {
                             const fontSize = 12 / globalScale;
                             const radius =
-                              selectedMetric === "Eigenvector Centrality"
-                                ? Math.max(15, node.eigenvector * 80)
+                              selectedMetric === "PageRank Centrality"
+                                ? Math.max(10, node.pagerank * 500)
+                                : selectedMetric === "Eigenvector Centrality"
+                                ? Math.max(10, node.eigenvector * 60)
                                 : selectedMetric === "Closeness Centrality"
-                                ? Math.max(15, node.closeness * 50)
+                                ? Math.max(10, node.closeness * 50)
                                 : selectedMetric === "Betweenness Centrality"
-                                ? Math.max(15, node.betweenness * 80)
+                                ? Math.max(10, node.betweenness * 80)
                                 : selectedMetric === "Degree Centrality"
-                                ? Math.max(15, node.degree * 80)
+                                ? Math.max(10, node.degree * 80)
                                 : 20;
 
                             ctx.save();
@@ -887,7 +890,9 @@ const Home = () => {
                               false
                             );
                             ctx.fillStyle =
-                              selectedMetric === "Eigenvector Centrality"
+                              selectedMetric === "PageRank Centrality"
+                                ? "orange"
+                                : selectedMetric === "Eigenvector Centrality"
                                 ? "purple"
                                 : selectedMetric === "Closeness Centrality"
                                 ? "green"
@@ -932,6 +937,14 @@ const Home = () => {
                               ctx.fillStyle = "purple";
                               ctx.fillText(
                                 `Eig: ${node.eigenvector?.toFixed(4) || 0}`,
+                                node.x,
+                                node.y + radius + 5
+                              );
+                            }
+                            if (selectedMetric === "PageRank Centrality") {
+                              ctx.fillStyle = "orange";
+                              ctx.fillText(
+                                `PR: ${node.pagerank?.toFixed(4) || 0}`,
                                 node.x,
                                 node.y + radius + 5
                               );
