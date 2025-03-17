@@ -41,9 +41,7 @@ const Home = () => {
   const [inputKey, setInputKey] = useState(Date.now());
   const [showFilters, setShowFilters] = useState(true);
   const [showMetrics, setShowMetrics] = useState(true);
-  const [showDegree, setShowDegree] = useState(false);
-  const [showBetweenness, setShowBetweenness] = useState(false);
-  const [showCloseness, setShowCloseness] = useState(false);
+  const [selectedMetric, setSelectedMetric] = useState(null);
   const [showDensity, setShowDensity] = useState(false);
   const [densityValue, setDensityValue] = useState(0);
   const [showDiameter, setShowDiameter] = useState(false);
@@ -60,14 +58,15 @@ const Home = () => {
   const [isAnonymized, setIsAnonymized] = useState(false);
   const [endTime, setEndTime] = useState("");
   const [startTime, setStartTime] = useState("");
-  const [limitType, setLimitType] = useState("first"); // Default limit type is 'first'
+  const [limitType, setLimitType] = useState("first");
 
   const forceGraphRef = useRef(null);
 
   const graphMetrics = [
-    "Degree",
-    "Betweenness",
-    "Closeness",
+    "Degree Centrality",
+    "Betweenness Centrality",
+    "Closeness Centrality",
+    "Eigenvector Centrality",
     "Density",
     "Diameter",
   ];
@@ -122,8 +121,8 @@ const Home = () => {
       method: "POST",
       body: formData,
       headers: {
-        "Accept": "application/json",
-    }
+        Accept: "application/json",
+      },
     })
       .then((response) => response.json())
       .then((data) => {
@@ -186,7 +185,7 @@ const Home = () => {
     if (selectedUsers) params.append("selected_users", selectedUsers);
     if (startTime) params.append("start_time", formatTime(startTime));
     if (endTime) params.append("end_time", formatTime(endTime));
-    if (limitType) params.append("limit_type", limitType); // Ensure correct type is sent!
+    if (limitType) params.append("limit_type", limitType);
 
     params.append("anonymize", isAnonymized ? "true" : "false");
 
@@ -235,6 +234,7 @@ const Home = () => {
       })
       .catch(() => setMessage("An error occurred while saving the form."));
   };
+
   const calculateNetworkStats = () => {
     if (!networkData) return;
 
@@ -267,6 +267,7 @@ const Home = () => {
       outDegreeMap,
     });
   };
+
   const calculateNodeDegree = (nodes, links) => {
     const degreeMap = {};
     nodes.forEach((node) => (degreeMap[node.id] = 0));
@@ -277,99 +278,26 @@ const Home = () => {
     return nodes.map((node) => ({ ...node, degree: degreeMap[node.id] || 0 }));
   };
 
-  const handleDegreeMetric = () => {
-    setShowDegree(!showDegree);
-    if (!showDegree && networkData) {
-      const updatedNodes = calculateNodeDegree(
-        networkData.nodes,
-        networkData.links
-      );
-      setNetworkData({ nodes: updatedNodes, links: networkData.links });
-    }
-  };
-
-  const handleBetweennessMetric = () => {
-    setShowBetweenness(!showBetweenness);
-
-    if (!showBetweenness && networkData) {
-      const updatedNodes = networkData.nodes.map((node) => ({
-        ...node,
-        betweenness: node.betweenness || 0,
-        degree: node.degree || 0,
-      }));
-
-      setNetworkData((prevData) => ({
-        nodes: updatedNodes,
-        links: prevData.links,
-      }));
-    }
-  };
-
-  const calculateCloseness = (nodes, links) => {
-    const distances = {};
-    nodes.forEach((node) => {
-      distances[node.id] = {};
-      nodes.forEach(
-        (n) => (distances[node.id][n.id] = node.id === n.id ? 0 : Infinity)
-      );
-    });
-
-    links.forEach((link) => {
-      distances[link.source][link.target] = 1;
-      distances[link.target][link.source] = 1;
-    });
-
-    nodes.forEach((k) => {
-      nodes.forEach((i) => {
-        nodes.forEach((j) => {
-          if (
-            distances[i.id][j.id] >
-            distances[i.id][k.id] + distances[k.id][j.id]
-          ) {
-            distances[i.id][j.id] =
-              distances[i.id][k.id] + distances[k.id][j.id];
-          }
-        });
-      });
-    });
-
-    return nodes.map((node) => {
-      const sumDistances = Object.values(distances[node.id]).reduce(
-        (a, b) => a + (b !== Infinity ? b : 0),
-        0
-      );
-      const closeness = sumDistances > 0 ? 1 / sumDistances : 0;
-      return { ...node, closeness };
-    });
-  };
-
-  const handleClosenessMetric = () => {
-    setShowCloseness(!showCloseness);
-    if (!showCloseness && networkData) {
-      const updatedNodes = calculateCloseness(
-        networkData.nodes,
-        networkData.links
-      );
-      setNetworkData({ nodes: updatedNodes, links: networkData.links });
-    }
+  const handleToggleMetric = (metric) => {
+    setSelectedMetric(selectedMetric === metric ? null : metric);
   };
 
   const handleDensityMetric = () => {
+    const density = calculateDensity(networkData.nodes, networkData.links);
+    setDensityValue(density.toFixed(4));
     setShowDensity(!showDensity);
-    if (!showDensity && networkData) {
-      const density = calculateDensity(networkData.nodes, networkData.links);
-      setDensityValue(density.toFixed(4));
-    }
   };
 
   const calculateDensity = (nodes, links) => {
     const n = nodes.length;
     const m = links.length;
-    if (n <= 1) return 0;
+    if (n < 2) return 0;
     return (2 * m) / (n * (n - 1));
   };
 
   const calculateDiameter = (nodes, links) => {
+    if (nodes.length < 2) return 0;
+
     const distances = {};
     nodes.forEach((node) => {
       distances[node.id] = {};
@@ -383,6 +311,7 @@ const Home = () => {
       distances[link.target][link.source] = 1;
     });
 
+    // Floyd-Warshall
     nodes.forEach((k) => {
       nodes.forEach((i) => {
         nodes.forEach((j) => {
@@ -593,15 +522,14 @@ const Home = () => {
                         onChange={handleInputChange(setMessageLimit)}
                         className="research-input"
                       />
-                    
                     </Form.Group>
                   </Col>
                   <Col lg={4} md={4} className="mb-3">
                     <Form.Group>
-                    <Form.Label className="research-label">
+                      <Form.Label className="research-label">
                         Last/First Limit:
                       </Form.Label>
-                    <select
+                      <select
                         value={limitType}
                         onChange={(e) => setLimitType(e.target.value)}
                         className="research-input"
@@ -612,7 +540,6 @@ const Home = () => {
                       </select>
                     </Form.Group>
                   </Col>
-
                 </Row>
                 <Row className="mt-3">
                   {/* <Col lg={4} md={4} className="mb-3">
@@ -792,19 +719,10 @@ const Home = () => {
                         <Button
                           key={metric}
                           className={`metrics-item ${
-                            (metric === "Degree" && showDegree) ||
-                            (metric === "Betweenness" && showBetweenness) ||
-                            (metric === "Closeness" && showCloseness) ||
-                            (metric === "Density" && showDensity) ||
-                            (metric === "Diameter" && showDiameter)
-                              ? "active"
-                              : ""
+                            selectedMetric === metric ? "active" : ""
                           }`}
                           onClick={() => {
-                            if (metric === "Degree") handleDegreeMetric();
-                            if (metric === "Betweenness")
-                              handleBetweennessMetric();
-                            if (metric === "Closeness") handleClosenessMetric();
+                            handleToggleMetric(metric);
                             if (metric === "Density") handleDensityMetric();
                             if (metric === "Diameter") handleDiameterMetric();
                           }}
@@ -894,13 +812,7 @@ const Home = () => {
                     {networkData && (
                       <GraphContainer>
                         <ForceGraph2D
-                          key={
-                            showDegree ||
-                            showBetweenness ||
-                            showCloseness ||
-                            showDensity ||
-                            showDiameter
-                          }
+                          key={showDensity || showDiameter}
                           graphData={{
                             nodes: filteredNodes,
                             links: filteredLinks.map((link) => ({
@@ -953,13 +865,16 @@ const Home = () => {
                           }}
                           nodeCanvasObject={(node, ctx, globalScale) => {
                             const fontSize = 12 / globalScale;
-                            const radius = showCloseness
-                              ? Math.max(5, node.closeness * 200)
-                              : showBetweenness
-                              ? Math.max(5, node.betweenness * 20)
-                              : showDegree
-                              ? Math.max(5, node.degree * 5)
-                              : 8;
+                            const radius =
+                              selectedMetric === "Eigenvector Centrality"
+                                ? Math.max(15, node.eigenvector * 80)
+                                : selectedMetric === "Closeness Centrality"
+                                ? Math.max(15, node.closeness * 50)
+                                : selectedMetric === "Betweenness Centrality"
+                                ? Math.max(15, node.betweenness * 80)
+                                : selectedMetric === "Degree Centrality"
+                                ? Math.max(15, node.degree * 80)
+                                : 20;
 
                             ctx.save();
                             ctx.beginPath();
@@ -971,51 +886,54 @@ const Home = () => {
                               2 * Math.PI,
                               false
                             );
-                            ctx.fillStyle = showCloseness
-                              ? "green"
-                              : showBetweenness
-                              ? "red"
-                              : showDegree
-                              ? "#231d81"
-                              : node.color || "blue";
+                            ctx.fillStyle =
+                              selectedMetric === "Eigenvector Centrality"
+                                ? "purple"
+                                : selectedMetric === "Closeness Centrality"
+                                ? "green"
+                                : selectedMetric === "Betweenness Centrality"
+                                ? "red"
+                                : selectedMetric === "Degree Centrality"
+                                ? "#231d81"
+                                : node.color || "blue";
                             ctx.fill();
 
                             ctx.font = `${fontSize}px Sans-Serif`;
                             ctx.textAlign = "center";
                             ctx.textBaseline = "middle";
                             ctx.fillStyle = "black";
-                            ctx.fillText(node.id, node.x, node.y + radius + 12);
+                            ctx.fillText(node.id, node.x, node.y);
 
-                            if (showDegree) {
+                            if (selectedMetric === "Degree Centrality") {
                               ctx.fillStyle = "#231d81";
                               ctx.fillText(
                                 `Deg: ${node.degree}`,
                                 node.x,
-                                node.y + radius + 20
+                                node.y + radius + 5
                               );
                             }
-                            if (showBetweenness) {
+                            if (selectedMetric === "Betweenness Centrality") {
                               ctx.fillStyle = "DarkRed";
                               ctx.fillText(
                                 `Btw: ${node.betweenness?.toFixed(2) || 0}`,
                                 node.x,
-                                node.y + radius + 35
+                                node.y + radius + 5
                               );
                             }
-                            if (showCloseness) {
+                            if (selectedMetric === "Closeness Centrality") {
                               ctx.fillStyle = "green";
                               ctx.fillText(
                                 `Cls: ${node.closeness?.toFixed(2) || 0}`,
                                 node.x,
-                                node.y + radius + 50
+                                node.y + radius + 5
                               );
                             }
-                            if ((minMessages || maxMessages) && node.messages) {
-                              ctx.fillStyle = "blue";
+                            if (selectedMetric === "Eigenvector Centrality") {
+                              ctx.fillStyle = "purple";
                               ctx.fillText(
-                                `Msg: ${node.messages}`,
+                                `Eig: ${node.eigenvector?.toFixed(4) || 0}`,
                                 node.x,
-                                node.y + radius + 65
+                                node.y + radius + 5
                               );
                             }
 

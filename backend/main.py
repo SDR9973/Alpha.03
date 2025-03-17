@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 from jose import jwt, JWTError
 import bcrypt
 import os
+import networkx as nx
+
 
 # Load environment variables
 load_dotenv()
@@ -275,140 +277,6 @@ def parse_datetime(date: str, time: str):
 
 
 
-# @app.get("/analyze/network/{filename}")
-# async def analyze_network(
-#     filename: str,
-#     start_date: str = Query(None),
-#     start_time: str = Query(None),
-#     end_date: str = Query(None),
-#     end_time: str = Query(None),
-#     limit: int = Query(None),  
-#     limit_type: str = Query("first"),  
-#     min_length: int = Query(None),  
-#     max_length: int = Query(None),
-#     keywords: str = Query(None),
-#     min_messages: int = Query(None), 
-#     max_messages: int = Query(None), 
-#     active_users: int = Query(None), 
-#     selected_users: str = Query(None), 
-#     username: str = Query(None),
-#     anonymize: bool = Query(False)
-# ):
-#     try:
-#         print(f"Analyzing file: {filename}, Anonymization: {anonymize}, Limit Type: {limit_type}")
-#         file_path = os.path.join(UPLOAD_FOLDER, filename)
-#         if not os.path.exists(file_path):
-#             return JSONResponse(content={"error": f"File '{filename}' not found."}, status_code=404)
-
-#         nodes = set()
-#         user_message_count = defaultdict(int)
-#         edges_counter = defaultdict(int)
-#         previous_sender = None
-#         anonymized_map = {}  # מילון לאנונימיזציה
-
-#         keyword_list = [kw.strip().lower() for kw in keywords.split(",")] if keywords else []
-#         selected_user_list = [user.strip().lower() for user in selected_users.split(",")] if selected_users else []
-
-#          # עיבוד תאריכים
-#         start_datetime = None
-#         end_datetime = None
-
-#         if start_date and start_time:
-#             start_datetime = datetime.strptime(f"{start_date} {start_time}", "%Y-%m-%d %H:%M:%S")
-#         elif start_date:
-#             start_datetime = datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S")
-
-#         if end_date and end_time:
-#             end_datetime = datetime.strptime(f"{end_date} {end_time}", "%Y-%m-%d %H:%M:%S")
-#         elif end_date:
-#             end_datetime = datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S")
-
-#         print(f"🔹 Converted: start_datetime={start_datetime}, end_datetime={end_datetime}")
-
-
-
-#         count = 0
-#         with open(file_path, "r", encoding="utf-8") as f:
-#             lines = f.readlines()
-        
-#          # סינון לפי תאריכים
-#         filtered_lines = []
-#         for line in lines:
-#             if line.startswith("[") and "]" in line:
-#                 date_part = line.split("] ")[0].strip("[]")
-#                 try:
-#                     current_datetime = datetime.strptime(date_part, "%d.%m.%Y, %H:%M:%S")
-#                 except ValueError:
-#                     continue  # דילוג על שורות לא תקינות
-
-#                 if start_datetime and end_datetime and start_datetime <= current_datetime <= end_datetime:
-#                     filtered_lines.append(line)
-
-#         print(f"🔹 Found {len(filtered_lines)} messages in the date range.")
-
-#         # יישום מגבלת limit אחרי הסינון!
-#         if limit and limit_type == "first":
-#             selected_lines = filtered_lines[:limit]
-#         elif limit and limit_type == "last":
-#             selected_lines = filtered_lines[-limit:]
-#         else:
-#             selected_lines = filtered_lines
-
-#         print(f"🔹 Processing {len(selected_lines)} messages (Limit Type: {limit_type})")
-
-
-
-
-#         # יישום מגבלת limit אחרי הסינון!
-#         if limit and limit_type == "first":
-#             selected_lines = filtered_lines[:limit]
-#         elif limit and limit_type == "last":
-#             selected_lines = filtered_lines[-limit:]
-#         else:
-#             selected_lines = filtered_lines
-
-#         print(f"🔹 Processing {len(selected_lines)} messages (Limit Type: {limit_type})")
-
-#         for line in selected_lines:
-#             try:
-#                 if "הושמטה" in line or "הושמט" in line:
-#                     continue
-                
-#                 if line.startswith("[") and "]" in line and ": " in line:
-#                     _, message_part = line.split("] ", 1)
-#                     sender = message_part.split(":")[0].strip("~").replace("\u202a", "").strip()
-                    
-#                     if sender:
-#                         if anonymize:
-#                             sender = anonymize_name(sender, anonymized_map)
-                        
-#                         nodes.add(sender)
-#                         if previous_sender and previous_sender != sender:
-#                             edge = tuple(sorted([previous_sender, sender]))
-#                             edges_counter[edge] += 1
-#                         previous_sender = sender
-#             except Exception as e:
-#                 print(f"Error processing line: {line.strip()} - {e}")
-#                 continue
-
-#         nodes_list = [{"id": anonymize_name(node, anonymized_map) if anonymize else node} for node in nodes]
-        
-#         links_list = [
-#             {"source": anonymized_map.get(edge[0], edge[0]) if anonymize else edge[0], 
-#              "target": anonymized_map.get(edge[1], edge[1]) if anonymize else edge[1],
-#              "weight": weight}
-#             for edge, weight in edges_counter.items()
-#         ]
-
-#         print(f"Final nodes: {nodes_list}")
-#         print(f"Final links with weights: {links_list}")
-
-#         return JSONResponse(content={"nodes": nodes_list, "links": links_list}, status_code=200)
-#     except Exception as e:
-#         print("Error:", e)
-#         return JSONResponse(content={"error": str(e)}, status_code=500)
-
-
 @app.get("/analyze/network/{filename}")
 async def analyze_network(
     filename: str,
@@ -438,12 +306,11 @@ async def analyze_network(
         user_message_count = defaultdict(int)
         edges_counter = defaultdict(int)
         previous_sender = None
-        anonymized_map = {}  # מילון לאנונימיזציה
+        anonymized_map = {}  
 
         keyword_list = [kw.strip().lower() for kw in keywords.split(",")] if keywords else []
         selected_user_list = [user.strip().lower() for user in selected_users.split(",")] if selected_users else []
 
-        # עיבוד תאריכים
         start_datetime = None
         end_datetime = None
 
@@ -462,7 +329,6 @@ async def analyze_network(
         with open(file_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
         
-        # סינון לפי תאריכים
         filtered_lines = []
         for line in lines:
             if line.startswith("[") and "]" in line:
@@ -470,7 +336,7 @@ async def analyze_network(
                 try:
                     current_datetime = datetime.strptime(date_part, "%d.%m.%Y, %H:%M:%S")
                 except ValueError:
-                    continue  # דילוג על שורות לא תקינות
+                    continue  
 
                 if ((start_datetime and current_datetime >= start_datetime) or not start_datetime) and \
                    ((end_datetime and current_datetime <= end_datetime) or not end_datetime):
@@ -478,7 +344,6 @@ async def analyze_network(
 
         print(f"🔹 Found {len(filtered_lines)} messages in the date range.")
 
-        # יישום מגבלת limit אחרי הסינון!
         if limit and limit_type == "first":
             selected_lines = filtered_lines[:limit]
         elif limit and limit_type == "last":
@@ -499,7 +364,6 @@ async def analyze_network(
                     sender = parts[0].strip("~").replace("\u202a", "").strip()
                     message_content = parts[1].strip() if len(parts) > 1 else ""
                     
-                    # פילטרים חדשים שהוספנו
                     message_length = len(message_content)
                     if (min_length and message_length < min_length) or (max_length and message_length > max_length):
                         continue
@@ -525,7 +389,6 @@ async def analyze_network(
                 print(f"Error processing line: {line.strip()} - {e}")
                 continue
 
-        # פילטרים נוספים לאחר העיבוד הראשוני
         filtered_users = {
             user: count for user, count in user_message_count.items()
             if (not min_messages or count >= min_messages) and (not max_messages or count <= max_messages)
@@ -539,21 +402,42 @@ async def analyze_network(
             filtered_users = {user: count for user, count in filtered_users.items() 
                              if user.lower() in selected_user_list}
         
-        # עדכון רשימת הצמתים בהתאם לפילטרים
         filtered_nodes = set(filtered_users.keys())
         if anonymize:
             filtered_nodes = {anonymize_name(node, anonymized_map) for node in filtered_nodes}
-        
-        # יצירת רשימת הצמתים עם ספירת ההודעות
-        nodes_list = []
-        for node in filtered_nodes:
-            original_node = next((k for k, v in anonymized_map.items() if v == node), node) if anonymize else node
-            nodes_list.append({
-                "id": node,
-                "messages": user_message_count[original_node]
-            })
+       
+        G = nx.Graph()
+        G.add_nodes_from(filtered_nodes)
+        for (source, target), weight in edges_counter.items():
+            if source in filtered_nodes and target in filtered_nodes:
+                G.add_edge(source, target, weight=weight)
+       
+        degree_centrality = nx.degree_centrality(G)
+        betweenness_centrality = nx.betweenness_centrality(G, weight="weight", normalized=True)
+        if not nx.is_connected(G):
+            print("Warning: The graph is not fully connected. Betweenness centrality might be inaccurate.")
+
+        if nx.is_connected(G):
+            closeness_centrality = nx.closeness_centrality(G)
+            eigenvector_centrality = nx.eigenvector_centrality(G, max_iter=1000)
+        else:
+            largest_cc = max(nx.connected_components(G), key=len)
+            G_subgraph = G.subgraph(largest_cc).copy()
+            closeness_centrality = nx.closeness_centrality(G_subgraph)
+            eigenvector_centrality = nx.eigenvector_centrality(G_subgraph, max_iter=1000)
             
-        # יצירת רשימת הקשרים רק עבור הצמתים המסוננים
+        nodes_list = [
+            {
+                "id": node,
+                "messages": user_message_count.get(node, 0),
+                "degree": round(degree_centrality.get(node, 0), 4),
+                "betweenness": round(betweenness_centrality.get(node, 0), 4),
+                "closeness": round(closeness_centrality.get(node, 0), 4),
+                "eigenvector": round(eigenvector_centrality.get(node, 0), 4), 
+            }
+            for node in filtered_nodes
+        ]
+            
         links_list = []
         for edge, weight in edges_counter.items():
             source, target = edge
