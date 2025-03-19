@@ -9,7 +9,9 @@ import EditProfile from "./pages/EditProfile.jsx";
 import PrivateRoute from "./components/PrivateRoute";
 import Header from "./components/Header/Header.jsx";
 import Menu from "./components/Menu/Menu.jsx";
-import UploadWhatsAppFile from "./pages/Form.jsx";
+import HomeW from "./pages/HomeW.jsx";
+// import UploadWhatsAppFile from "./pages/Form.jsx";
+import ChoosePlatform from "./pages/ChoosePlatform.jsx";
 
 function App() {
   const [isOpen, setIsOpen] = useState(false);
@@ -22,7 +24,10 @@ function App() {
       {/* {user && <Header isOpen={isOpen} />} */}
       <div className={`main-content ${isOpen ? "expanded" : "collapsed"}`}>
         <Routes>
-          <Route path="/" element={<Home />} />
+          {/* <Route path="/" element={<Home />} /> */}
+          <Route path="/" element={<ChoosePlatform />} />
+          <Route path="/home" element={<Home />} />
+          <Route path="/home_wikipedia" element={<HomeW />} />
           <Route path="/sign-in" element={<SignIn />} />
           <Route path="/sign-up" element={<SignUp />} />
           <Route element={<PrivateRoute />}>

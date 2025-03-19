@@ -23,6 +23,7 @@ import "./Home.css";
 // Import custom styles
 import { AlertBox, GraphContainer } from "./Form.style.js";
 import AnonymizationToggle from "../components/AnonymizationToggle.jsx";
+// import WikipediaDataFetcher from "../components/WikipediaDataFetcher.jsx";
 
 const Home = () => {
   const [name, setName] = useState("");
@@ -447,6 +448,7 @@ const Home = () => {
               <Button className="upload-btn" onClick={handleUploadClick}>
                 <Upload size={16} /> Upload File
               </Button>
+              {/* <WikipediaDataFetcher setNetworkData={setNetworkData} /> */}
               <Form.Control
                 type="file"
                 accept=".txt"
