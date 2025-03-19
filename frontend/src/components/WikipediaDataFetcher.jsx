@@ -81,7 +81,7 @@ const WikipediaDataFetcher = ({ setNetworkData, setWikiUrl }) => {
 
   const handleFetchData = async () => {
     if (!localWikiUrl.trim()) {
-      setMessage("❌ Please enter a Wikipedia discussion page URL.");
+      setMessage(" Please enter a Wikipedia discussion page URL.");
       return;
     }
 
@@ -104,13 +104,13 @@ const WikipediaDataFetcher = ({ setNetworkData, setWikiUrl }) => {
 
       if (data.nodes && data.links) {
         setNetworkData(data); // ✅ Send data to `HomeW.jsx`
-        setMessage("✅ Data successfully loaded!");
+        setMessage(" Data successfully loaded!");
       } else {
         setMessage("⚠️ No valid discussion data found on this Wikipedia page.");
       }
     } catch (error) {
       console.error("Error loading Wikipedia data:", error);
-      setMessage(`❌ Server connection error: ${error.message}`);
+      setMessage(` Server connection error: ${error.message}`);
     } finally {
       setLoading(false);
     }
