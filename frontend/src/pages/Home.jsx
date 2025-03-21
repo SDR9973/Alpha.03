@@ -66,7 +66,8 @@ const Home = () => {
   const [selectedNode, setSelectedNode] = useState(null);
   const [nodeToRemove, setNodeToRemove] = useState(null);
   const [showRemoveNodeModal, setShowRemoveNodeModal] = useState(false);
-
+  const [activityFilterEnabled, setActivityFilterEnabled] = useState(false);
+  const [activityThreshold, setActivityThreshold] = useState(2); // Default: nodes with at least 2 connections
   const forceGraphRef = useRef(null);
 
   const graphMetrics = [
@@ -457,7 +458,6 @@ const Home = () => {
   const handleRemoveNode = () => {
     if (!selectedNode || !networkData) return;
 
-
     const updatedNodes = networkData.nodes.filter(
       (node) => node.id !== selectedNode.id
     );
@@ -470,11 +470,9 @@ const Home = () => {
         link.target.id !== selectedNode.id
     );
 
-
     if (!originalNetworkData) {
       setOriginalNetworkData(networkData);
     }
-
 
     setNetworkData({
       nodes: updatedNodes,
@@ -491,6 +489,109 @@ const Home = () => {
     }
   };
 
+  const handleActivityFilter = () => {
+    if (!networkData) return;
+
+    // Toggle the activity filter state
+    const newState = !activityFilterEnabled;
+    setActivityFilterEnabled(newState);
+
+    if (newState) {
+      // Save original data if not already saved
+      if (!originalNetworkData) {
+        setOriginalNetworkData(networkData);
+      }
+
+      // Count connections for each node (sum of in-degree and out-degree)
+      const connectionCounts = {};
+      networkData.nodes.forEach((node) => {
+        connectionCounts[node.id] = 0;
+      });
+
+      networkData.links.forEach((link) => {
+        // Handle both string IDs and object references
+        const sourceId =
+          typeof link.source === "object" ? link.source.id : link.source;
+        const targetId =
+          typeof link.target === "object" ? link.target.id : link.target;
+
+        connectionCounts[sourceId] = (connectionCounts[sourceId] || 0) + 1;
+        connectionCounts[targetId] = (connectionCounts[targetId] || 0) + 1;
+      });
+
+      // Filter nodes with connections >= threshold
+      const activeNodes = networkData.nodes.filter(
+        (node) => connectionCounts[node.id] >= activityThreshold
+      );
+
+      // Filter links that connect only active nodes
+      const activeLinks = networkData.links.filter((link) => {
+        const sourceId =
+          typeof link.source === "object" ? link.source.id : link.source;
+        const targetId =
+          typeof link.target === "object" ? link.target.id : link.target;
+
+        return (
+          activeNodes.some((node) => node.id === sourceId) &&
+          activeNodes.some((node) => node.id === targetId)
+        );
+      });
+
+      setNetworkData({
+        nodes: activeNodes,
+        links: activeLinks,
+      });
+    } else {
+      // Restore original network
+      if (originalNetworkData) {
+        setNetworkData(originalNetworkData);
+      }
+    }
+  };
+
+  //  function to apply activity filter with specific threshold
+  const applyActivityFilter = (threshold) => {
+    if (!originalNetworkData) return;
+
+    // Count connections for each node
+    const connectionCounts = {};
+    originalNetworkData.nodes.forEach((node) => {
+      connectionCounts[node.id] = 0;
+    });
+
+    originalNetworkData.links.forEach((link) => {
+      const sourceId =
+        typeof link.source === "object" ? link.source.id : link.source;
+      const targetId =
+        typeof link.target === "object" ? link.target.id : link.target;
+
+      connectionCounts[sourceId] = (connectionCounts[sourceId] || 0) + 1;
+      connectionCounts[targetId] = (connectionCounts[targetId] || 0) + 1;
+    });
+
+    // Filter nodes with connections >= threshold
+    const activeNodes = originalNetworkData.nodes.filter(
+      (node) => connectionCounts[node.id] >= threshold
+    );
+
+    // Filter links that connect only active nodes
+    const activeLinks = originalNetworkData.links.filter((link) => {
+      const sourceId =
+        typeof link.source === "object" ? link.source.id : link.source;
+      const targetId =
+        typeof link.target === "object" ? link.target.id : link.target;
+
+      return (
+        activeNodes.some((node) => node.id === sourceId) &&
+        activeNodes.some((node) => node.id === targetId)
+      );
+    });
+
+    setNetworkData({
+      nodes: activeNodes,
+      links: activeLinks,
+    });
+  };
   return (
     <Container fluid className="upload-section">
       {/* Research Upload */}
@@ -550,7 +651,7 @@ const Home = () => {
               <Button className="upload-btn" onClick={handleUploadClick}>
                 <Upload size={16} /> Upload File
               </Button>
-      
+
               <Form.Control
                 type="file"
                 accept=".txt"
@@ -675,7 +776,6 @@ const Home = () => {
                   </Col>
                 </Row>
                 <Row className="mt-3">
-                 
                   <Row className="mt-3">
                     <Col lg={6} md={6} className="mb-3">
                       <Form.Group>
@@ -807,6 +907,33 @@ const Home = () => {
               </div>
             )}
           </Card>
+          {activityFilterEnabled && (
+            <Card className="research-card mt-3">
+              <h4 className="fw-bold">Activity Threshold</h4>
+              <p>Show users with at least this many connections:</p>
+              <Form.Group>
+                <div className="d-flex align-items-center">
+                  <Form.Range
+                    min={1}
+                    max={10}
+                    value={activityThreshold}
+                    onChange={(e) => {
+                      const newThreshold = parseInt(e.target.value, 10);
+                      setActivityThreshold(newThreshold);
+                      // Only apply if we have data and filter is enabled
+                      if (activityFilterEnabled && originalNetworkData) {
+                        applyActivityFilter(newThreshold);
+                      }
+                    }}
+                    className="flex-grow-1 me-2"
+                  />
+                  <div className="activity-value-display">
+                    {activityThreshold}
+                  </div>
+                </div>
+              </Form.Group>
+            </Card>
+          )}
 
           {uploadedFile && (
             <Row className="mt-4">
@@ -869,11 +996,21 @@ const Home = () => {
                         Highlight Central Nodes
                       </Button>
                       <Button
-                        className={`metrics-item`}
+                        className={`metrics-item ${false ? "active" : ""}`} // Always false to ensure it's not active by default
                         onClick={handleRestoreNetwork}
                         disabled={!originalNetworkData}
                       >
                         Restore Original Network
+                      </Button>
+                      <Button
+                        className={`metrics-item ${
+                          activityFilterEnabled === true ? "active" : ""
+                        }`}
+                        onClick={handleActivityFilter}
+                      >
+                        {activityFilterEnabled
+                          ? "Show All Users"
+                          : "Hide Inactive Users"}
                       </Button>
                     </div>
                   )}
@@ -947,7 +1084,6 @@ const Home = () => {
                 )}
 
                 <Card className="graph-card">
-                 
                   <div className="graph-placeholder">
                     {networkData && (
                       <GraphContainer>
@@ -1049,11 +1185,9 @@ const Home = () => {
                               ? "#231d81"
                               : node.color || "blue";
 
-                          
                             ctx.fillStyle = color;
                             ctx.fill();
 
-                            
                             if (isHighlighted) {
                               ctx.strokeStyle = "#ffff00"; // yellow stroke
                               ctx.lineWidth = 3;
