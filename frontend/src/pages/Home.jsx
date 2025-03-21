@@ -62,6 +62,10 @@ const Home = () => {
   const [limitType, setLimitType] = useState("first");
   const [originalNetworkData, setOriginalNetworkData] = useState(null);
   const [strongConnectionsActive, setStrongConnectionsActive] = useState(false);
+  const [highlightCentralNodes, setHighlightCentralNodes] = useState(false);
+  const [selectedNode, setSelectedNode] = useState(null);
+  const [nodeToRemove, setNodeToRemove] = useState(null);
+  const [showRemoveNodeModal, setShowRemoveNodeModal] = useState(false);
 
   const forceGraphRef = useRef(null);
 
@@ -373,8 +377,7 @@ const Home = () => {
       setNetworkData(originalNetworkData);
       setStrongConnectionsActive(false);
     } else {
-  
-      const threshold = 0.2; 
+      const threshold = 0.2;
       const filteredNodes = networkData.nodes.filter(
         (node) => node.betweenness >= threshold
       );
@@ -386,6 +389,105 @@ const Home = () => {
 
       setNetworkData({ nodes: filteredNodes, links: filteredLinks });
       setStrongConnectionsActive(true);
+    }
+  };
+
+  const handleHighlightCentralNodes = () => {
+    if (!networkData) return;
+
+    setHighlightCentralNodes(!highlightCentralNodes);
+
+    if (!highlightCentralNodes) {
+      // Calculate which centrality measure to use based on selected metric
+      let centralityMeasure = "degree";
+      if (selectedMetric === "Betweenness Centrality")
+        centralityMeasure = "betweenness";
+      else if (selectedMetric === "Closeness Centrality")
+        centralityMeasure = "closeness";
+      else if (selectedMetric === "Eigenvector Centrality")
+        centralityMeasure = "eigenvector";
+      else if (selectedMetric === "PageRank Centrality")
+        centralityMeasure = "pagerank";
+
+      // Create a copy of the network data to modify
+      const updatedNodes = networkData.nodes.map((node) => {
+        // Get the centrality value for this node
+        const centralityValue = node[centralityMeasure] || 0;
+
+        // Sort nodes by centrality and find threshold for top 20%
+        const sortedNodes = [...networkData.nodes].sort(
+          (a, b) => (b[centralityMeasure] || 0) - (a[centralityMeasure] || 0)
+        );
+
+        const thresholdIndex = Math.floor(sortedNodes.length * 0.2);
+        const threshold =
+          thresholdIndex >= 0 && thresholdIndex < sortedNodes.length
+            ? sortedNodes[thresholdIndex][centralityMeasure] || 0
+            : 0;
+
+        return {
+          ...node,
+          highlighted: centralityValue >= threshold,
+        };
+      });
+
+      setNetworkData({
+        ...networkData,
+        nodes: updatedNodes,
+      });
+    } else {
+      // Reset highlighting
+      const resetNodes = networkData.nodes.map((node) => ({
+        ...node,
+        highlighted: false,
+      }));
+
+      setNetworkData({
+        ...networkData,
+        nodes: resetNodes,
+      });
+    }
+  };
+
+  const handleNodeClick = (node) => {
+    setSelectedNode(node);
+    setShowRemoveNodeModal(true);
+  };
+
+  const handleRemoveNode = () => {
+    if (!selectedNode || !networkData) return;
+
+
+    const updatedNodes = networkData.nodes.filter(
+      (node) => node.id !== selectedNode.id
+    );
+
+    const updatedLinks = networkData.links.filter(
+      (link) =>
+        link.source !== selectedNode.id &&
+        link.target !== selectedNode.id &&
+        link.source.id !== selectedNode.id &&
+        link.target.id !== selectedNode.id
+    );
+
+
+    if (!originalNetworkData) {
+      setOriginalNetworkData(networkData);
+    }
+
+
+    setNetworkData({
+      nodes: updatedNodes,
+      links: updatedLinks,
+    });
+
+    setShowRemoveNodeModal(false);
+    setSelectedNode(null);
+  };
+
+  const handleRestoreNetwork = () => {
+    if (originalNetworkData) {
+      setNetworkData(originalNetworkData);
     }
   };
 
@@ -448,7 +550,7 @@ const Home = () => {
               <Button className="upload-btn" onClick={handleUploadClick}>
                 <Upload size={16} /> Upload File
               </Button>
-              {/* <WikipediaDataFetcher setNetworkData={setNetworkData} /> */}
+      
               <Form.Control
                 type="file"
                 accept=".txt"
@@ -466,7 +568,7 @@ const Home = () => {
           </Row>
         </Form>
       </Card>
-      {/* Research Filters */}
+
       {uploadedFile && (
         <div>
           <Card className="research-card">
@@ -573,21 +675,7 @@ const Home = () => {
                   </Col>
                 </Row>
                 <Row className="mt-3">
-                  {/* <Col lg={4} md={4} className="mb-3">
-                    <Form.Group>
-                      <Form.Label className="research-label">
-                        Message Length (Characters):
-                      </Form.Label>
-                      <Form.Control
-                        type="number"
-                        min="10"
-                        max="1000"
-                        value={messageLength}
-                        onChange={handleInputChange(setMessageLength)}
-                        className="research-input"
-                      />
-                    </Form.Group>
-                  </Col> */}
+                 
                   <Row className="mt-3">
                     <Col lg={6} md={6} className="mb-3">
                       <Form.Group>
@@ -772,6 +860,21 @@ const Home = () => {
                           ? "Show All Connections"
                           : "Strongest Connections"}
                       </Button>
+                      <Button
+                        className={`metrics-item ${
+                          highlightCentralNodes ? "active" : ""
+                        }`}
+                        onClick={handleHighlightCentralNodes}
+                      >
+                        Highlight Central Nodes
+                      </Button>
+                      <Button
+                        className={`metrics-item`}
+                        onClick={handleRestoreNetwork}
+                        disabled={!originalNetworkData}
+                      >
+                        Restore Original Network
+                      </Button>
                     </div>
                   )}
                 </Card>
@@ -844,12 +947,7 @@ const Home = () => {
                 )}
 
                 <Card className="graph-card">
-                  {/* <span
-                    className="position-absolute top-0 end-0 p-2 text-muted"
-                    style={{ cursor: "pointer" }}
-                  >
-                    Save{" "}
-                  </span> */}
+                 
                   <div className="graph-placeholder">
                     {networkData && (
                       <GraphContainer>
@@ -883,6 +981,7 @@ const Home = () => {
                           cooldownTicks={100}
                           d3AlphaDecay={0.03}
                           d3VelocityDecay={0.2}
+                          onNodeClick={handleNodeClick}
                           onEngineStop={() =>
                             forceGraphRef.current?.zoomToFit(400, 100)
                           }
@@ -930,20 +1029,38 @@ const Home = () => {
                               2 * Math.PI,
                               false
                             );
-                            ctx.fillStyle =
-                              selectedMetric === "PageRank Centrality"
-                                ? "orange"
-                                : selectedMetric === "Eigenvector Centrality"
-                                ? "purple"
-                                : selectedMetric === "Closeness Centrality"
-                                ? "green"
-                                : selectedMetric === "Betweenness Centrality"
-                                ? "red"
-                                : selectedMetric === "Degree Centrality"
-                                ? "#231d81"
-                                : node.color || "blue";
+
+                            // Define isHighlighted first
+                            const isHighlighted =
+                              node.highlighted && highlightCentralNodes;
+
+                            // Define the color based on highlighting and selected metric
+                            const color = isHighlighted
+                              ? "#ff9900" // bright orange for highlighted nodes
+                              : selectedMetric === "PageRank Centrality"
+                              ? "orange"
+                              : selectedMetric === "Eigenvector Centrality"
+                              ? "purple"
+                              : selectedMetric === "Closeness Centrality"
+                              ? "green"
+                              : selectedMetric === "Betweenness Centrality"
+                              ? "red"
+                              : selectedMetric === "Degree Centrality"
+                              ? "#231d81"
+                              : node.color || "blue";
+
+                          
+                            ctx.fillStyle = color;
                             ctx.fill();
 
+                            
+                            if (isHighlighted) {
+                              ctx.strokeStyle = "#ffff00"; // yellow stroke
+                              ctx.lineWidth = 3;
+                              ctx.stroke();
+                            }
+
+                            // Text rendering
                             ctx.font = `${fontSize}px Sans-Serif`;
                             ctx.textAlign = "center";
                             ctx.textBaseline = "middle";
@@ -1001,6 +1118,54 @@ const Home = () => {
               </Col>
             </Row>
           )}
+        </div>
+      )}
+      {/* Node Removal Modal */}
+      {showRemoveNodeModal && selectedNode && (
+        <div
+          className="modal show d-block"
+          tabIndex="-1"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+        >
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Remove Node from Network</h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setShowRemoveNodeModal(false)}
+                  aria-label="Close"
+                ></button>
+              </div>
+              <div className="modal-body">
+                <p>
+                  Are you sure you want to remove the node{" "}
+                  <strong>"{selectedNode.id}"</strong> from the network?
+                </p>
+                <p>
+                  This will help analyze the impact of this user on the network
+                  structure.
+                </p>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowRemoveNodeModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={handleRemoveNode}
+                >
+                  Remove Node
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </Container>
