@@ -64,9 +64,6 @@ const HomeW = () => {
   const [strongConnectionsActive, setStrongConnectionsActive] = useState(false);
   const [wikiUrl, setWikiUrl] = useState("");
 
-
-
-
   const forceGraphRef = useRef(null);
 
   const graphMetrics = [
@@ -79,11 +76,13 @@ const HomeW = () => {
     "Diameter",
   ];
   useEffect(() => {
-    if (!uploadedFile && !wikiUrl) { // בדיקה גם על wikiUrl
+    if (!uploadedFile && !wikiUrl) {
+      // בדיקה גם על wikiUrl
       setFile(null);
       setChartData(null);
       setFilter("");
       setStartDate("");
+      setNetworkData(null);
       setEndDate("");
       setMessageLimit(50);
       setKeywords("");
@@ -95,16 +94,22 @@ const HomeW = () => {
     if (networkData) {
       calculateNetworkStats();
     }
+    setTimeout(() => {
+      if (forceGraphRef.current) {
+        forceGraphRef.current.zoomToFit(400);
+      }
+    }, 500);
+
     console.log("Updated network data in HomeW:", networkData);
     if (networkData && networkData.nodes && networkData.nodes.length > 0) {
-      setShowFilters(true); // מציג את הפילטרים כאשר יש נתונים
-  }
-  
-  }, [uploadedFile, showMetrics, networkData, wikiUrl]); // הוספת wikiUrl כדי שלא ימחקו נתוני ויקיפדיה
-  
+      setShowFilters(true);
+    }
+  }, [uploadedFile, showMetrics, networkData, wikiUrl]);
+
   const handleFileChange = (event) => {
     const selectedFile = event.target.files[0];
     if (!selectedFile) return;
+    setWikiUrl("");
     setFile(selectedFile);
     setUploadedFile("");
     setChartData(null);
@@ -147,7 +152,7 @@ const HomeW = () => {
   };
 
   const handleDelete = async () => {
-    if (!uploadedFile) {
+    if (!uploadedFile && !wikiUrl) {
       setMessage("No file selected to delete.");
       return;
     }
@@ -156,6 +161,16 @@ const HomeW = () => {
         `http://localhost:8001/delete/${uploadedFile}`,
         { method: "DELETE" }
       );
+      if (wikiUrl) {
+        
+        // Just clear the Wikipedia data
+        setWikiUrl("");
+        setNetworkData(null);
+        setOriginalNetworkData(null);
+        setMessage("Wikipedia data cleared successfully!");
+        return;
+      }
+
       const data = await response.json();
       if (data.success) {
         setMessage(data.message || "File deleted successfully!");
@@ -181,45 +196,117 @@ const HomeW = () => {
     return time && time.length === 5 ? `${time}:00` : time;
   };
 
+
   const handleNetworkAnalysis = () => {
-    let url = `http://localhost:8001/analyze/network/${uploadedFile}`;
-    const params = new URLSearchParams();
-    if (startDate) params.append("start_date", startDate);
-    if (endDate) params.append("end_date", endDate);
-    if (messageLimit) params.append("limit", messageLimit);
-    if (minMessageLength) params.append("min_length", minMessageLength);
-    if (maxMessageLength) params.append("max_length", maxMessageLength);
-    if (keywords) params.append("keywords", keywords);
-    if (usernameFilter) params.append("username", usernameFilter);
-    if (minMessages) params.append("min_messages", minMessages);
-    if (maxMessages) params.append("max_messages", maxMessages);
-    if (activeUsers) params.append("active_users", activeUsers);
-    if (selectedUsers) params.append("selected_users", selectedUsers);
-    if (startTime) params.append("start_time", formatTime(startTime));
-    if (endTime) params.append("end_time", formatTime(endTime));
-    if (limitType) params.append("limit_type", limitType);
+    // Reset any previous error messages
+    setMessage("");
 
-    params.append("anonymize", isAnonymized ? "true" : "false");
+    // if (wikiUrl) {
+    //   console.log("Applying filters on Wikipedia data");
+    //   // Make sure the Wikipedia data is properly formatted
+    //   if (
+    //     originalNetworkData &&
+    //     originalNetworkData.nodes &&
+    //     originalNetworkData.links
+    //   ) {
+    //     setNetworkData({ ...originalNetworkData });
+    //   }
+    // } else {
+    //   if (!uploadedFile) {
+    //     setMessage("No file selected for analysis.");
+    //     console.log("No file available for network analysis.");
+    //     return;
+    //   }
+    if (wikiUrl) {
+      console.log("Applying filters on Wikipedia data");
+      setMessage("Applying filters to Wikipedia data..."); // Add this line
+      
+      if (
+        originalNetworkData &&
+        originalNetworkData.nodes &&
+        originalNetworkData.links
+      ) {
+        setNetworkData({ ...originalNetworkData });
+        setMessage("Filters applied to Wikipedia data successfully!"); // Add this line
+      } else {
+        setMessage("No valid Wikipedia data available."); // Add this line
+      }
+    }
+    else {
+        if (!uploadedFile) {
+          setMessage("No file selected for analysis.");
+          console.log("No file available for network analysis.");
+          return;
+        }
+        
+      let url = `http://localhost:8001/analyze/network/${uploadedFile}`;
+      const params = new URLSearchParams();
 
-    url += `?${params.toString()}`;
-    console.log("Request URL:", url);
-    fetch(url)
-      .then((response) => response.json())
-      .then((data) => {
-        console.log("Data returned from server:", data);
-        if (data.nodes && data.links) {
-          setNetworkData(data);
-        }
-        if (!originalNetworkData) {
-          setOriginalNetworkData(data); // שמירת העותק
-        } else {
-          setMessage("No data returned from server.");
-        }
-      })
-      .catch((err) => {
-        setMessage("An error occurred during network analysis.");
-        console.error("Error during network analysis:", err);
-      });
+      if (startDate) params.append("start_date", startDate);
+      if (endDate) params.append("end_date", endDate);
+      if (messageLimit) params.append("limit", messageLimit);
+      if (minMessageLength) params.append("min_length", minMessageLength);
+      if (maxMessageLength) params.append("max_length", maxMessageLength);
+      if (keywords) params.append("keywords", keywords);
+      if (usernameFilter) params.append("username", usernameFilter);
+      if (minMessages) params.append("min_messages", minMessages);
+      if (maxMessages) params.append("max_messages", maxMessages);
+      if (activeUsers) params.append("active_users", activeUsers);
+      if (selectedUsers) params.append("selected_users", selectedUsers);
+      if (startTime) params.append("start_time", formatTime(startTime));
+      if (endTime) params.append("end_time", formatTime(endTime));
+      if (limitType) params.append("limit_type", limitType);
+
+      params.append("anonymize", isAnonymized ? "true" : "false");
+
+      url += `?${params.toString()}`;
+      console.log("Request URL:", url);
+
+      // Show loading message
+      setMessage("Loading network data...");
+
+      fetch(url)
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`Server responded with status: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then((data) => {
+          console.log("Data returned from server:", data);
+          if (data.nodes && data.links) {
+            // Make sure nodes have unique IDs
+            const processedData = {
+              nodes: data.nodes.map((node) => ({
+                ...node,
+                id: String(node.id), // Ensure ID is a string
+              })),
+              links: data.links.map((link) => ({
+                ...link,
+                source: String(link.source), // Ensure source is a string
+                target: String(link.target), // Ensure target is a string
+              })),
+            };
+
+            setNetworkData(processedData);
+            setOriginalNetworkData(processedData);
+            setMessage("Network analysis completed successfully!");
+
+            // Ensure the graph is rendered and zoomed properly
+            setTimeout(() => {
+              if (forceGraphRef.current) {
+                forceGraphRef.current.zoomToFit(400);
+              }
+            }, 500);
+          } else {
+            setMessage("No valid network data returned from server.");
+          }
+        })
+        .catch((err) => {
+          setMessage(`Error during network analysis: ${err.message}`);
+          console.error("Error during network analysis:", err);
+        });
+    }
   };
 
   const handleSaveToDB = () => {
@@ -251,7 +338,7 @@ const HomeW = () => {
   };
 
   const calculateNetworkStats = () => {
-    if (!networkData) return;
+    if (!networkData || !networkData.nodes || !networkData.links) return;
 
     const { nodes, links } = networkData;
     const numNodes = nodes.length;
@@ -261,18 +348,31 @@ const HomeW = () => {
     let reciprocalEdges = 0;
 
     links.forEach((link) => {
-      inDegreeMap[link.target] = (inDegreeMap[link.target] || 0) + 1;
-      outDegreeMap[link.source] = (outDegreeMap[link.source] || 0) + 1;
+      const targetId =
+        typeof link.target === "object" ? link.target.id : link.target;
+      const sourceId =
+        typeof link.source === "object" ? link.source.id : link.source;
 
-      if (
-        links.some((l) => l.source === link.target && l.target === link.source)
-      ) {
+      inDegreeMap[targetId] = (inDegreeMap[targetId] || 0) + 1;
+      outDegreeMap[sourceId] = (outDegreeMap[sourceId] || 0) + 1;
+
+      // Check for reciprocal edges
+      const hasReciprocal = links.some((l) => {
+        const otherSource =
+          typeof l.source === "object" ? l.source.id : l.source;
+        const otherTarget =
+          typeof l.target === "object" ? l.target.id : l.target;
+        return otherSource === targetId && otherTarget === sourceId;
+      });
+
+      if (hasReciprocal) {
         reciprocalEdges++;
       }
     });
 
+    // Calculate reciprocity (fix possible double counting)
     const reciprocity =
-      numEdges > 0 ? (reciprocalEdges / numEdges).toFixed(2) : 0;
+      numEdges > 0 ? (reciprocalEdges / (2 * numEdges)).toFixed(2) : 0;
 
     setNetworkStats({
       numNodes,
@@ -293,9 +393,6 @@ const HomeW = () => {
     return nodes.map((node) => ({ ...node, degree: degreeMap[node.id] || 0 }));
   };
 
-  // const handleToggleMetric = (metric) => {
-  //   setSelectedMetric(selectedMetric === metric ? null : metric);
-  // };
   const handleToggleMetric = (metric) => {
     setSelectedMetric((prevMetric) => (prevMetric === metric ? null : metric));
   };
@@ -306,55 +403,6 @@ const HomeW = () => {
     setShowDensity(!showDensity);
   };
 
-  // const calculateDensity = (nodes, links) => {
-  //   const n = nodes.length;
-  //   const m = links.length;
-  //   if (n < 2) return 0;
-  //   return (2 * m) / (n * (n - 1));
-  // };
-
-  // const calculateDiameter = (nodes, links) => {
-  //   if (nodes.length < 2) return 0;
-
-  //   const distances = {};
-  //   nodes.forEach((node) => {
-  //     distances[node.id] = {};
-  //     nodes.forEach(
-  //       (n) => (distances[node.id][n.id] = node.id === n.id ? 0 : Infinity)
-  //     );
-  //   });
-
-  //   links.forEach((link) => {
-  //     distances[link.source][link.target] = 1;
-  //     distances[link.target][link.source] = 1;
-  //   });
-
-  //   // Floyd-Warshall
-  //   nodes.forEach((k) => {
-  //     nodes.forEach((i) => {
-  //       nodes.forEach((j) => {
-  //         if (
-  //           distances[i.id][j.id] >
-  //           distances[i.id][k.id] + distances[k.id][j.id]
-  //         ) {
-  //           distances[i.id][j.id] =
-  //             distances[i.id][k.id] + distances[k.id][j.id];
-  //         }
-  //       });
-  //     });
-  //   });
-
-  //   let maxDistance = 0;
-  //   nodes.forEach((i) => {
-  //     nodes.forEach((j) => {
-  //       if (distances[i.id][j.id] !== Infinity) {
-  //         maxDistance = Math.max(maxDistance, distances[i.id][j.id]);
-  //       }
-  //     });
-  //   });
-
-  //   return maxDistance;
-  // };
   const calculateDiameter = (nodes, links) => {
     if (nodes.length < 2) return 0;
 
@@ -421,43 +469,42 @@ const HomeW = () => {
       )
     : [];
 
-  // const handleStrongConnections = () => {
-  //   if (!networkData) return;
-
-  //   if (strongConnectionsActive) {
-  //     setNetworkData(originalNetworkData);
-  //     setStrongConnectionsActive(false);
-  //   } else {
-  //     const threshold = 0.2;
-  //     const filteredNodes = networkData.nodes.filter(
-  //       (node) => node.betweenness >= threshold
-  //     );
-  //     const filteredLinks = networkData.links.filter(
-  //       (link) =>
-  //         filteredNodes.some((node) => node.id === link.source) &&
-  //         filteredNodes.some((node) => node.id === link.target)
-  //     );
-
-  //     setNetworkData({ nodes: filteredNodes, links: filteredLinks });
-  //     setStrongConnectionsActive(true);
-  //   }
-  // };
   const handleStrongConnections = () => {
-    if (!networkData) return;
+    if (!networkData || !networkData.nodes || !networkData.links) return;
 
     if (strongConnectionsActive) {
       setNetworkData(originalNetworkData);
       setStrongConnectionsActive(false);
     } else {
+      // Check if betweenness property exists on nodes
+      if (!networkData.nodes.some((node) => node.betweenness !== undefined)) {
+        setMessage(
+          "Betweenness centrality metrics not available for this graph. Try analyzing first."
+        );
+        return;
+      }
+
       const threshold = 0.2;
       const filteredNodes = networkData.nodes.filter(
         (node) => node.betweenness && node.betweenness >= threshold
       );
-      const filteredLinks = networkData.links.filter(
-        (link) =>
-          filteredNodes.some((node) => node.id === link.source) &&
-          filteredNodes.some((node) => node.id === link.target)
-      );
+
+      if (filteredNodes.length === 0) {
+        setMessage("No nodes meet the betweenness threshold criteria.");
+        return;
+      }
+
+      const filteredLinks = networkData.links.filter((link) => {
+        const sourceId =
+          typeof link.source === "object" ? link.source.id : link.source;
+        const targetId =
+          typeof link.target === "object" ? link.target.id : link.target;
+
+        return (
+          filteredNodes.some((node) => node.id === sourceId) &&
+          filteredNodes.some((node) => node.id === targetId)
+        );
+      });
 
       setNetworkData({ nodes: filteredNodes, links: filteredLinks });
       setStrongConnectionsActive(true);
@@ -520,21 +567,15 @@ const HomeW = () => {
               md={12}
               className="d-flex flex-column align-items-center mt-3 mt-lg-0"
             >
-              {/* <WikipediaDataFetcher
+              <WikipediaDataFetcher
                 setNetworkData={(data) => {
                   console.log("Wikipedia Data received in HomeW:", data);
                   setNetworkData(data);
+                  setOriginalNetworkData(data);
+                  setUploadedFile(""); // Clear WhatsApp file when loading Wikipedia data
                 }}
-              /> */}
-
-<WikipediaDataFetcher
-  setNetworkData={(data) => {
-    console.log("Wikipedia Data received in HomeW:", data);
-    setNetworkData(data);
-  }}
-  setWikiUrl={setWikiUrl}
-/>
-
+                setWikiUrl={setWikiUrl}
+              />
 
               <Form.Control
                 type="file"
@@ -554,7 +595,7 @@ const HomeW = () => {
         </Form>
       </Card>
       {/* Research Filters */}
-      {(uploadedFile || (networkData && networkData.nodes.length > 0))  && (
+      {(uploadedFile || (networkData && networkData.nodes.length > 0)) && (
         <div>
           <Card className="research-card">
             <h4 className="fw-bold d-flex justify-content-between align-items-center">
@@ -573,6 +614,11 @@ const HomeW = () => {
             </h4>
             {showFilters && (
               <div>
+                {wikiUrl && (
+                  <div className="alert alert-info mb-3">
+                    Wikipedia data loaded from: {wikiUrl}
+                  </div>
+                )}
                 <Row className="mt-3">
                   <Col lg={4} md={4} className="mb-3">
                     <Form.Group>
@@ -660,7 +706,6 @@ const HomeW = () => {
                   </Col>
                 </Row>
                 <Row className="mt-3">
-                
                   <Row className="mt-3">
                     <Col lg={6} md={6} className="mb-3">
                       <Form.Group>
@@ -793,7 +838,7 @@ const HomeW = () => {
             )}
           </Card>
 
-          {uploadedFile && (
+          {(uploadedFile || wikiUrl) && (
             <Row className="mt-4">
               <Col
                 lg={3}
@@ -917,13 +962,7 @@ const HomeW = () => {
                 )}
 
                 <Card className="graph-card">
-                  {/* <span
-                    className="position-absolute top-0 end-0 p-2 text-muted"
-                    style={{ cursor: "pointer" }}
-                  >
-                    Save{" "}
-                  </span> */}
-                  {networkData &&
+                  {/* {networkData &&
                     networkData.nodes &&
                     networkData.links &&
                     networkData.nodes.length > 0 && (
@@ -939,7 +978,41 @@ const HomeW = () => {
                         linkColor={() => "rgba(100, 100, 100, 0.6)"}
                         enableNodeDrag={true}
                       />
-                    )}
+                    )} */}
+                  {networkData &&
+                  networkData.nodes &&
+                  networkData.links &&
+                  networkData.nodes.length > 0 ? (
+                    <GraphContainer>
+                      <ForceGraph2D
+                        ref={forceGraphRef}
+                        graphData={{
+                          nodes: networkData.nodes,
+                          links: networkData.links,
+                        }}
+                        nodeLabel="id"
+                        linkDirectionalArrowLength={3.5}
+                        linkDirectionalArrowRelPos={1}
+                        linkCurvature={0.25}
+                        nodeAutoColorBy="group"
+                        linkWidth={(link) => Math.sqrt(link.weight || 1)}
+                        linkColor={() => "rgba(100, 100, 100, 0.6)"}
+                        enableNodeDrag={true}
+                        onEngineStop={() => {
+                          if (forceGraphRef.current) {
+                            forceGraphRef.current.zoomToFit(400, 100);
+                          }
+                        }}
+                        cooldownTime={3000}
+                      />
+                    </GraphContainer>
+                  ) : (
+                    <div className="no-data-message">
+                      {message
+                        ? message
+                        : "No network data available. Apply filters to generate the graph."}
+                    </div>
+                  )}
                 </Card>
               </Col>
             </Row>
