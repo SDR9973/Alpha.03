@@ -12,6 +12,8 @@ from jose import jwt, JWTError
 import bcrypt
 import os
 import networkx as nx
+import community as community_louvain
+import networkx.algorithms.community as nx_community
 import numpy
 import scipy
 import json
@@ -643,6 +645,134 @@ async def analyze_network_comparison(
         import traceback
         traceback.print_exc()
         return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/analyze/communities/{filename}")
+async def analyze_communities(
+    filename: str,
+    start_date: str = Query(None),
+    start_time: str = Query(None),
+    end_date: str = Query(None),
+    end_time: str = Query(None),
+    limit: int = Query(None),  
+    limit_type: str = Query("first"),  
+    min_length: int = Query(None),  
+    max_length: int = Query(None),
+    keywords: str = Query(None),
+    min_messages: int = Query(None), 
+    max_messages: int = Query(None), 
+    active_users: int = Query(None), 
+    selected_users: str = Query(None), 
+    username: str = Query(None),
+    anonymize: bool = Query(False),
+    algorithm: str = Query("louvain")  
+):
+    try:
+        network_result = await analyze_network(
+            filename, start_date, start_time, end_date, end_time, limit, limit_type, 
+            min_length, max_length, keywords, min_messages, max_messages, 
+            active_users, selected_users, username, anonymize
+        )
+        
+        if hasattr(network_result, 'body'):
+            network_data = json.loads(network_result.body)
+        else:
+            network_data = network_result
+        
+        if "error" in network_data:
+            return JSONResponse(content=network_data, status_code=400)
+        
+        G = nx.Graph()
+        
+        for node in network_data["nodes"]:
+            G.add_node(node["id"], **{k: v for k, v in node.items() if k != "id"})
+        
+        for link in network_data["links"]:
+            source = link["source"]
+            target = link["target"]
+            weight = link.get("weight", 1)
+            
+            if isinstance(source, dict) and "id" in source:
+                source = source["id"]
+            if isinstance(target, dict) and "id" in target:
+                target = target["id"]
+                
+            G.add_edge(source, target, weight=weight)
+        
+        communities = {}
+        node_communities = {}
+        
+        if algorithm == "louvain":
+            partition = community_louvain.best_partition(G)
+            node_communities = partition
+            
+            for node, community_id in partition.items():
+                if community_id not in communities:
+                    communities[community_id] = []
+                communities[community_id].append(node)
+                
+        elif algorithm == "girvan_newman":
+            communities_iter = nx_community.girvan_newman(G)
+            communities_list = list(next(communities_iter))
+            
+            for i, community in enumerate(communities_list):
+                communities[i] = list(community)
+                for node in community:
+                    node_communities[node] = i
+                    
+        elif algorithm == "greedy_modularity":
+            communities_list = list(nx_community.greedy_modularity_communities(G))
+            
+            for i, community in enumerate(communities_list):
+                communities[i] = list(community)
+                for node in community:
+                    node_communities[node] = i
+        else:
+            return JSONResponse(
+                content={"error": f"Unknown algorithm: {algorithm}. Supported: louvain, girvan_newman, greedy_modularity"},
+                status_code=400
+            )
+        
+        communities_list = [
+            {
+                "id": community_id,
+                "size": len(nodes),
+                "nodes": nodes,
+                "avg_betweenness": sum(network_data["nodes"][i]["betweenness"] 
+                                     for i, node in enumerate(network_data["nodes"]) 
+                                     if node["id"] in nodes) / len(nodes) if nodes else 0,
+                "avg_pagerank": sum(network_data["nodes"][i]["pagerank"] 
+                                  for i, node in enumerate(network_data["nodes"]) 
+                                  if node["id"] in nodes) / len(nodes) if nodes else 0,
+            }
+            for community_id, nodes in communities.items()
+        ]
+        
+        communities_list.sort(key=lambda x: x["size"], reverse=True)
+        
+        for i, node in enumerate(network_data["nodes"]):
+            node_id = node["id"]
+            if node_id in node_communities:
+                network_data["nodes"][i]["community"] = node_communities[node_id]
+        
+        return JSONResponse(content={
+            "nodes": network_data["nodes"],
+            "links": network_data["links"],
+            "communities": communities_list,
+            "node_communities": node_communities,
+            "algorithm": algorithm,
+            "num_communities": len(communities),
+            "modularity": community_louvain.modularity(node_communities, G) if algorithm == "louvain" else None
+        }, status_code=200)
+        
+    except Exception as e:
+        print(f"Error in community detection: {e}")
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+
 
 # save reaserch to mongo db
 @app.post("/save-form")

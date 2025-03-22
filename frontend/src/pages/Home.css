@@ -66,37 +66,6 @@
   transition: background 0.3s ease-in-out;
 }
 
-/* .research-range {
-  -webkit-appearance: none;
-  width: 100%;
-  height: 6px;
-  border-radius: 5px;
-  outline: none;
-  background: linear-gradient(to right, #050d2d 50%, #e0e0e0 50%);
-  transition: background 0.3s ease-in-out;
-  position: relative;
-}
-
-.research-range::-webkit-slider-runnable-track {
-  height: 6px;
-  border-radius: 5px;
-  background: transparent;
-  position: relative;
-}
-
-.research-range::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  background-color: #050d2d;
-  border-radius: 50%;
-  border: 2px solid white;
-  cursor: pointer;
-  margin-top: -5px;
-  position: relative;
-} */
-
 .toggle-btn {
   right: 5px;
   top: 10px;
@@ -176,11 +145,12 @@
   color: #6c757d;
 }
 .comparison-card {
+  padding: 1rem;
+  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
   background-color: #ffffff;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  padding: 20px;
-  margin-bottom: 20px;
+  border: none;
+  position: relative;
 }
 
 .comparison-card .card-header {

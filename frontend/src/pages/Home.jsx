@@ -23,6 +23,7 @@ import "./Home.css";
 // Import custom styles
 import { AlertBox, GraphContainer } from "./Form.style.js";
 import AnonymizationToggle from "../components/AnonymizationToggle.jsx";
+import NetworkCustomizationToolbar from "../components/NetworkCustomizationToolbar.jsx";
 
 const Home = () => {
   const [name, setName] = useState("");
@@ -72,7 +73,36 @@ const Home = () => {
   const [highlightCommonNodes, setHighlightCommonNodes] = useState(false);
   const [filteredOriginalData, setFilteredOriginalData] = useState(null);
   const [filteredComparisonData, setFilteredComparisonData] = useState({});
+  const [communities, setCommunities] = useState([]);
+  const [customizedNetworkData, setCustomizedNetworkData] = useState(null);
   const forceGraphRef = useRef(null);
+
+  const [visualizationSettings, setVisualizationSettings] = useState({
+    colorBy: "default",
+    sizeBy: "default",
+    highlightUsers: [],
+    highlightCommunities: [],
+    customColors: {
+      defaultNodeColor: "#050d2d",
+      highlightNodeColor: "#00c6c2",
+      communityColors: [
+        "#313659",
+        "#5f6289",
+        "#324b4a",
+        "#158582",
+        "#9092bc",
+        "#c4c6f1",
+      ],
+      edgeColor: "rgba(128, 128, 128, 0.6)",
+    },
+    nodeSizes: {
+      min: 10,
+      max: 30,
+    },
+    colorScheme: "default",
+    showImportantNodes: false,
+    importantNodesThreshold: 0.5,
+  });
 
   const graphMetrics = [
     "Degree Centrality",
@@ -205,6 +235,7 @@ const Home = () => {
         if (data.nodes && data.links) {
           setNetworkData(data);
           setOriginalNetworkData(data);
+          fetchCommunityData();
         } else {
           setMessage("No data returned from server.");
         }
@@ -544,7 +575,193 @@ const Home = () => {
       commonNodesCount,
     };
   };
+  const fetchCommunityData = () => {
+    if (!uploadedFile) {
+      setMessage("No file selected for community detection.");
+      return;
+    }
 
+    const params = buildNetworkFilterParams();
+    params.append("algorithm", "louvain");
+
+    const url = `http://localhost:8001/analyze/communities/${uploadedFile}?${params.toString()}`;
+
+    console.log("Community detection URL:", url);
+    fetch(url)
+      .then((response) => response.json())
+      .then((data) => {
+        console.log("Community data returned from server:", data);
+        if (data.communities && data.nodes) {
+          setCommunities(data.communities);
+
+          if (networkData && networkData.nodes) {
+            const updatedNodes = networkData.nodes.map((node) => {
+              const matchingNode = data.nodes.find((n) => n.id === node.id);
+              if (matchingNode && matchingNode.community !== undefined) {
+                return { ...node, community: matchingNode.community };
+              }
+              return node;
+            });
+
+            setNetworkData({
+              nodes: updatedNodes,
+              links: networkData.links,
+            });
+            setOriginalNetworkData({
+              nodes: updatedNodes,
+              links: networkData.links,
+            });
+          }
+
+          setMessage(
+            `Detected ${data.communities.length} communities in the network.`
+          );
+        } else {
+          setMessage("No community data returned from server.");
+        }
+      })
+      .catch((err) => {
+        setMessage("An error occurred during community detection.");
+        console.error("Error during community detection:", err);
+      });
+  };
+
+  const handleNetworkCustomization = (settings) => {
+    setVisualizationSettings(settings);
+    console.log("Applying visualization settings:", settings);
+
+    if (!networkData) return;
+
+    const customizedNodes = JSON.parse(JSON.stringify(networkData.nodes));
+    const customizedLinks = JSON.parse(JSON.stringify(networkData.links));
+
+    for (const node of customizedNodes) {
+      let nodeSize = settings.nodeSizes.min;
+      let nodeColor = settings.customColors.defaultNodeColor;
+
+      if (settings.sizeBy === "messages") {
+        const maxMessages = Math.max(
+          ...customizedNodes.map((n) => n.messages || 0)
+        );
+        const sizeRatio =
+          maxMessages > 0 ? (node.messages || 0) / maxMessages : 0;
+        nodeSize =
+          settings.nodeSizes.min +
+          sizeRatio * (settings.nodeSizes.max - settings.nodeSizes.min);
+      } else if (settings.sizeBy === "degree") {
+        const maxDegree = Math.max(
+          ...customizedNodes.map((n) => n.degree || 0)
+        );
+        const sizeRatio = maxDegree > 0 ? (node.degree || 0) / maxDegree : 0;
+        nodeSize =
+          settings.nodeSizes.min +
+          sizeRatio * (settings.nodeSizes.max - settings.nodeSizes.min);
+      } else if (settings.sizeBy === "betweenness") {
+        const maxBetweenness = Math.max(
+          ...customizedNodes.map((n) => n.betweenness || 0)
+        );
+        const sizeRatio =
+          maxBetweenness > 0 ? (node.betweenness || 0) / maxBetweenness : 0;
+        nodeSize =
+          settings.nodeSizes.min +
+          sizeRatio * (settings.nodeSizes.max - settings.nodeSizes.min);
+      } else if (settings.sizeBy === "pagerank") {
+        const maxPageRank = Math.max(
+          ...customizedNodes.map((n) => n.pagerank || 0)
+        );
+        const sizeRatio =
+          maxPageRank > 0 ? (node.pagerank || 0) / maxPageRank : 0;
+        nodeSize =
+          settings.nodeSizes.min +
+          sizeRatio * (settings.nodeSizes.max - settings.nodeSizes.min);
+      }
+
+      if (settings.colorBy === "community" && node.community !== undefined) {
+        const communityId = node.community;
+        const communityColors = settings.communityColors || {};
+        const defaultColors = settings.customColors.communityColors;
+        nodeColor =
+          communityColors[communityId] ||
+          defaultColors[communityId % defaultColors.length];
+      } else if (settings.colorBy === "degree") {
+        const maxDegree = Math.max(
+          ...customizedNodes.map((n) => n.degree || 0)
+        );
+        const ratio = maxDegree > 0 ? (node.degree || 0) / maxDegree : 0;
+        nodeColor = interpolateColor(
+          "#FFFFFF",
+          settings.customColors.defaultNodeColor,
+          ratio
+        );
+      } else if (settings.colorBy === "betweenness") {
+        const maxBetweenness = Math.max(
+          ...customizedNodes.map((n) => n.betweenness || 0)
+        );
+        const ratio =
+          maxBetweenness > 0 ? (node.betweenness || 0) / maxBetweenness : 0;
+        nodeColor = interpolateColor("#FFFFFF", "#FF5733", ratio);
+      } else if (settings.colorBy === "pagerank") {
+        const maxPageRank = Math.max(
+          ...customizedNodes.map((n) => n.pagerank || 0)
+        );
+        const ratio = maxPageRank > 0 ? (node.pagerank || 0) / maxPageRank : 0;
+        nodeColor = interpolateColor("#FFFFFF", "#3366CC", ratio);
+      } else if (settings.colorBy === "custom") {
+        if (settings.highlightUsers.includes(node.id)) {
+          nodeColor = settings.customColors.highlightNodeColor;
+        }
+      }
+
+      if (
+        node.community !== undefined &&
+        settings.highlightCommunities.includes(node.community)
+      ) {
+        nodeColor = settings.customColors.highlightNodeColor;
+      }
+
+      if (settings.showImportantNodes) {
+        const threshold = settings.importantNodesThreshold || 0.5;
+        const maxBetweenness = Math.max(
+          ...customizedNodes.map((n) => n.betweenness || 0)
+        );
+        const maxPageRank = Math.max(
+          ...customizedNodes.map((n) => n.pagerank || 0)
+        );
+
+        if (
+          node.betweenness / maxBetweenness > threshold ||
+          node.pagerank / maxPageRank > threshold
+        ) {
+          nodeColor = settings.customColors.highlightNodeColor;
+          nodeSize = Math.max(nodeSize, settings.nodeSizes.max * 0.8);
+        }
+      }
+
+      node.size = nodeSize;
+      node.color = nodeColor;
+    }
+
+    setCustomizedNetworkData({
+      nodes: customizedNodes,
+      links: customizedLinks,
+    });
+  };
+
+  const interpolateColor = (color1, color2, ratio) => {
+    const r1 = parseInt(color1.substring(1, 3), 16);
+    const g1 = parseInt(color1.substring(3, 5), 16);
+    const b1 = parseInt(color1.substring(5, 7), 16);
+
+    const r2 = parseInt(color2.substring(1, 3), 16);
+    const g2 = parseInt(color2.substring(3, 5), 16);
+    const b2 = parseInt(color2.substring(5, 7), 16);
+
+    const r = Math.round(r1 + (r2 - r1) * ratio);
+    const g = Math.round(g1 + (g2 - g1) * ratio);
+    const b = Math.round(b1 + (b2 - b1) * ratio);
+
+    return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
+  };
   const toggleComparisonMetric = (metric) => {
     if (comparisonMetrics.includes(metric)) {
       setComparisonMetrics(comparisonMetrics.filter((m) => m !== metric));
@@ -658,8 +875,6 @@ const Home = () => {
   };
   const buildNetworkFilterParams = () => {
     const params = new URLSearchParams();
-
-    // Add all your filter parameters
     if (startDate) params.append("start_date", startDate);
     if (endDate) params.append("end_date", endDate);
     if (messageLimit) params.append("limit", messageLimit);
@@ -741,7 +956,6 @@ const Home = () => {
 
       return 20;
     };
-
     return (
       <ForceGraph2D
         graphData={processedData}
@@ -835,6 +1049,7 @@ const Home = () => {
       />
     );
   };
+
   return (
     <Container fluid className="upload-section">
       {/* Research Upload */}
@@ -1261,6 +1476,14 @@ const Home = () => {
 
               {/* Graph Display */}
               <Col lg={9} md={12} className="graph-area">
+                {networkData && (
+                  <NetworkCustomizationToolbar
+                    networkData={networkData}
+                    communities={communities}
+                    onApplyCustomization={handleNetworkCustomization}
+                    initialSettings={visualizationSettings}
+                  />
+                )}
                 {(showDensity || showDiameter) && (
                   <Card className="density-card">
                     {showDensity && (
@@ -1285,36 +1508,66 @@ const Home = () => {
                     {networkData && (
                       <GraphContainer>
                         <ForceGraph2D
-                          key={showDensity || showDiameter}
+                          key={
+                            showDensity || showDiameter || customizedNetworkData
+                              ? "customized"
+                              : "default"
+                          }
                           graphData={{
-                            nodes: filteredNodes,
-                            links: filteredLinks.map((link) => {
-                              const sourceNode = filteredNodes.find(
-                                (node) =>
-                                  (typeof link.source === "object" &&
-                                    node.id === link.source.id) ||
-                                  node.id === link.source
-                              );
+                            nodes: customizedNetworkData
+                              ? customizedNetworkData.nodes
+                              : filteredNodes,
+                            links: customizedNetworkData
+                              ? customizedNetworkData.links.map((link) => {
+                                  const sourceNode =
+                                    customizedNetworkData.nodes.find(
+                                      (node) =>
+                                        (typeof link.source === "object" &&
+                                          node.id === link.source.id) ||
+                                        node.id === link.source
+                                    );
 
-                              const targetNode = filteredNodes.find(
-                                (node) =>
-                                  (typeof link.target === "object" &&
-                                    node.id === link.target.id) ||
-                                  node.id === link.target
-                              );
+                                  const targetNode =
+                                    customizedNetworkData.nodes.find(
+                                      (node) =>
+                                        (typeof link.target === "object" &&
+                                          node.id === link.target.id) ||
+                                        node.id === link.target
+                                    );
 
-                              return {
-                                source: sourceNode || link.source,
-                                target: targetNode || link.target,
-                                weight: link.weight || 1,
-                              };
-                            }),
+                                  return {
+                                    source: sourceNode || link.source,
+                                    target: targetNode || link.target,
+                                    weight: link.weight || 1,
+                                  };
+                                })
+                              : filteredLinks.map((link) => {
+                                  const sourceNode = filteredNodes.find(
+                                    (node) =>
+                                      (typeof link.source === "object" &&
+                                        node.id === link.source.id) ||
+                                      node.id === link.source
+                                  );
+
+                                  const targetNode = filteredNodes.find(
+                                    (node) =>
+                                      (typeof link.target === "object" &&
+                                        node.id === link.target.id) ||
+                                      node.id === link.target
+                                  );
+
+                                  return {
+                                    source: sourceNode || link.source,
+                                    target: targetNode || link.target,
+                                    weight: link.weight || 1,
+                                  };
+                                }),
                           }}
                           width={showMetrics ? 1200 : 1500}
                           height={500}
                           fitView
                           fitViewPadding={20}
-                          nodeAutoColorBy="id"
+                          nodeAutoColorBy={customizedNetworkData ? null : "id"}
                           linkWidth={(link) => Math.sqrt(link.weight || 1)}
                           linkColor={() => "gray"}
                           enableNodeDrag={true}
@@ -1345,8 +1598,10 @@ const Home = () => {
                           }}
                           nodeCanvasObject={(node, ctx, globalScale) => {
                             const fontSize = 12 / globalScale;
+
                             const radius =
-                              selectedMetric === "PageRank Centrality"
+                              node.size ||
+                              (selectedMetric === "PageRank Centrality"
                                 ? Math.max(10, node.pagerank * 500)
                                 : selectedMetric === "Eigenvector Centrality"
                                 ? Math.max(10, node.eigenvector * 60)
@@ -1356,7 +1611,7 @@ const Home = () => {
                                 ? Math.max(10, node.betweenness * 80)
                                 : selectedMetric === "Degree Centrality"
                                 ? Math.max(10, node.degree * 80)
-                                : 20;
+                                : 20);
 
                             ctx.save();
                             ctx.beginPath();
@@ -1368,8 +1623,10 @@ const Home = () => {
                               2 * Math.PI,
                               false
                             );
+
                             ctx.fillStyle =
-                              selectedMetric === "PageRank Centrality"
+                              node.color ||
+                              (selectedMetric === "PageRank Centrality"
                                 ? "orange"
                                 : selectedMetric === "Eigenvector Centrality"
                                 ? "purple"
@@ -1379,13 +1636,14 @@ const Home = () => {
                                 ? "red"
                                 : selectedMetric === "Degree Centrality"
                                 ? "#231d81"
-                                : node.color || "blue";
+                                : node.color || "blue");
+
                             ctx.fill();
 
                             ctx.font = `${fontSize}px Sans-Serif`;
                             ctx.textAlign = "center";
                             ctx.textBaseline = "middle";
-                            ctx.fillStyle = "black";
+                            ctx.fillStyle = "white";
                             ctx.fillText(node.id, node.x, node.y);
 
                             if (selectedMetric === "Degree Centrality") {
