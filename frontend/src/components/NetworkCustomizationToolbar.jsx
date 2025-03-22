@@ -86,7 +86,22 @@ const NetworkCustomizationToolbar = ({
       setHighlightUsers([...highlightUsers, userId]);
     }
   };
-
+  
+  const handleToggleCommunity = (communityId) => {
+    if (highlightCommunities.includes(communityId)) {
+      setHighlightCommunities(highlightCommunities.filter(id => id !== communityId));
+    } else {
+      setHighlightCommunities([...highlightCommunities, communityId]);
+    }
+  };
+  
+  const handleCommunityColorChange = (communityId, color) => {
+    setCommunityColors({
+      ...communityColors,
+      [communityId]: color
+    });
+  };
+  
   const handleNodeSizeChange = (type, value) => {
     setNodeSizes({
       ...nodeSizes,
@@ -282,6 +297,56 @@ const NetworkCustomizationToolbar = ({
               </Form.Group>
             </Col>
           </Row>
+          
+          {communities && communities.length > 0 && (
+            <Row className="mt-2">
+              <Col md={12}>
+                <Card className="community-card p-2">
+                  <h6 className="d-flex align-items-center">
+                    <PeopleFill size={16} className="me-2" />
+                    Community Color Customization: 
+                    <span className="badge bg-primary ms-2">{communities.length} communities</span>
+                  </h6>
+                  
+                  <div className="community-colors-container">
+                    <Table responsive size="sm" className="community-table">
+                      <thead>
+                        <tr>
+                          <th>Community</th>
+                          <th>Node Count</th>
+                          <th>Color</th>
+                          <th>Highlight</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {communities.map((community, index) => (
+                          <tr key={community.id}>
+                            <td>Community {community.id}</td>
+                            <td>{community.size}</td>
+                            <td>
+                              <Form.Control 
+                                type="color" 
+                                value={communityColors[community.id] || colorSchemes[colorScheme][index % colorSchemes[colorScheme].length]}
+                                onChange={(e) => handleCommunityColorChange(community.id, e.target.value)}
+                                className="community-color-picker"
+                              />
+                            </td>
+                            <td>
+                              <Form.Check 
+                                type="switch"
+                                checked={highlightCommunities.includes(community.id)}
+                                onChange={() => handleToggleCommunity(community.id)}
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                  </div>
+                </Card>
+              </Col>
+            </Row>
+          )}
           
           {colorBy === 'custom' && (
             <Row className="mt-2">

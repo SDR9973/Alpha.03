@@ -223,7 +223,6 @@ const Home = () => {
       return;
     }
 
-    // Use the helper function to build parameters
     const params = buildNetworkFilterParams();
     const url = `http://localhost:8001/analyze/network/${uploadedFile}?${params.toString()}`;
 
