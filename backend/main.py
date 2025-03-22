@@ -14,6 +14,7 @@ import os
 import networkx as nx
 import numpy
 import scipy
+import json
 
 # Load environment variables
 load_dotenv()
@@ -465,9 +466,201 @@ async def analyze_network(
         print("Error:", e)
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
+
+@app.get("/analyze/comparison/{filename}")
+async def analyze_comparison(
+    filename: str,
+    start_date: str = Query(None),
+    start_time: str = Query(None),
+    end_date: str = Query(None),
+    end_time: str = Query(None),
+    limit: int = Query(None),  
+    limit_type: str = Query("first"),  
+    min_length: int = Query(None),  
+    max_length: int = Query(None),
+    keywords: str = Query(None),
+    min_messages: int = Query(None), 
+    max_messages: int = Query(None), 
+    active_users: int = Query(None), 
+    selected_users: str = Query(None), 
+    username: str = Query(None),
+    anonymize: bool = Query(False)
+):
+    result = await analyze_network(
+        filename, start_date, start_time, end_date, end_time, limit, limit_type, 
+        min_length, max_length, keywords, min_messages, max_messages, 
+        active_users, selected_users, username, anonymize
+    )
+    
+    if hasattr(result, 'body'):
+        content = json.loads(result.body)
+    else:
+        content = result
+    
+    return JSONResponse(content={**content, "filename": filename}, status_code=200)
+
+def apply_comparison_filters(network_data, node_filter, min_weight):
+    """Filter network by node filter and minimum weight."""
+    if not network_data or "nodes" not in network_data or "links" not in network_data:
+        return network_data
+    
+    # Filter nodes by text
+    filtered_nodes = []
+    if node_filter:
+        filtered_nodes = [
+            node for node in network_data["nodes"] 
+            if node_filter.lower() in node["id"].lower()
+        ]
+    else:
+        filtered_nodes = network_data["nodes"]
+    
+    # Create a set of node IDs for efficient lookup
+    node_ids = {node["id"] for node in filtered_nodes}
+    
+    # Filter links by minimum weight and node existence
+    filtered_links = [
+        link for link in network_data["links"]
+        if (link["weight"] >= min_weight and
+            (get_node_id(link["source"]) in node_ids) and
+            (get_node_id(link["target"]) in node_ids))
+    ]
+    
+    return {"nodes": filtered_nodes, "links": filtered_links}
+
+def get_node_id(node_ref):
+    """Get node ID whether it's a string or an object."""
+    if isinstance(node_ref, dict) and "id" in node_ref:
+        return node_ref["id"]
+    return node_ref
+
+def find_common_nodes(original_data, comparison_data):
+    """Find common nodes between two networks."""
+    original_ids = {node["id"] for node in original_data["nodes"]}
+    comparison_ids = {node["id"] for node in comparison_data["nodes"]}
+    return original_ids.intersection(comparison_ids)
+
+def mark_common_nodes(network_data, common_node_ids):
+    """Mark common nodes in a network."""
+    for node in network_data["nodes"]:
+        node["isCommon"] = node["id"] in common_node_ids
+    return network_data
+
+def get_network_metrics(original_data, comparison_data, metrics_list):
+    """Calculate network metrics for comparison."""
+    if not metrics_list:
+        return {}
+        
+    metrics_names = [m.strip() for m in metrics_list.split(",")]
+    results = {}
+    
+    # Calculate basic metrics
+    results["node_count"] = {
+        "original": len(original_data["nodes"]),
+        "comparison": len(comparison_data["nodes"]),
+        "difference": len(comparison_data["nodes"]) - len(original_data["nodes"]),
+        "percent_change": (
+            ((len(comparison_data["nodes"]) - len(original_data["nodes"])) / len(original_data["nodes"])) * 100
+            if len(original_data["nodes"]) > 0 else 0
+        )
+    }
+    
+    results["link_count"] = {
+        "original": len(original_data["links"]),
+        "comparison": len(comparison_data["links"]),
+        "difference": len(comparison_data["links"]) - len(original_data["links"]),
+        "percent_change": (
+            ((len(comparison_data["links"]) - len(original_data["links"])) / len(original_data["links"])) * 100
+            if len(original_data["links"]) > 0 else 0
+        )
+    }
+    
+    # Add more metrics based on the requested list
+    # Here you can calculate advanced metrics like density, diameter, etc.
+    
+    return results
+
+@app.get("/analyze/compare-networks")
+async def analyze_network_comparison(
+    original_filename: str = Query(...),
+    comparison_filename: str = Query(...),
+    start_date: str = Query(None),
+    start_time: str = Query(None),
+    end_date: str = Query(None),
+    end_time: str = Query(None),
+    limit: int = Query(None),  
+    limit_type: str = Query("first"),  
+    min_length: int = Query(None),  
+    max_length: int = Query(None),
+    keywords: str = Query(None),
+    min_messages: int = Query(None), 
+    max_messages: int = Query(None), 
+    active_users: int = Query(None), 
+    selected_users: str = Query(None), 
+    username: str = Query(None),
+    anonymize: bool = Query(False),
+    # New parameters for comparison filtering
+    min_weight: int = Query(1),
+    node_filter: str = Query(""),
+    highlight_common: bool = Query(False),
+    metrics: str = Query(None)  # Comma-separated list of metrics
+):
+    try:
+        print(f"Analyzing comparison between {original_filename} and {comparison_filename}")
+        
+        # Get original network data
+        original_result = await analyze_network(
+            original_filename, start_date, start_time, end_date, end_time,
+            limit, limit_type, min_length, max_length, keywords,
+            min_messages, max_messages, active_users, selected_users, 
+            username, anonymize
+        )
+        
+        # Get comparison network data
+        comparison_result = await analyze_network(
+            comparison_filename, start_date, start_time, end_date, end_time,
+            limit, limit_type, min_length, max_length, keywords,
+            min_messages, max_messages, active_users, selected_users, 
+            username, anonymize
+        )
+        
+        # Convert results to JSON if they aren't already
+        if hasattr(original_result, 'body'):
+            original_data = json.loads(original_result.body)
+        else:
+            original_data = original_result
+            
+        if hasattr(comparison_result, 'body'):
+            comparison_data = json.loads(comparison_result.body)
+        else:
+            comparison_data = comparison_result
+        
+        # Apply additional filters to both networks
+        filtered_original = apply_comparison_filters(original_data, node_filter, min_weight)
+        filtered_comparison = apply_comparison_filters(comparison_data, node_filter, min_weight)
+        
+        # Mark common nodes if requested
+        if highlight_common:
+            common_nodes = find_common_nodes(filtered_original, filtered_comparison)
+            mark_common_nodes(filtered_original, common_nodes)
+            mark_common_nodes(filtered_comparison, common_nodes)
+        
+        # Return both filtered networks
+        return JSONResponse(content={
+            "original": filtered_original,
+            "comparison": filtered_comparison,
+            "metrics": get_network_metrics(filtered_original, filtered_comparison, metrics)
+        }, status_code=200)
+        
+    except Exception as e:
+        print(f"Error in network comparison: {e}")
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
 # save reaserch to mongo db
 @app.post("/save-form")
 async def save_form(data: dict):
+    
     """
     Save form data into the Research_user collection in MongoDB.
     """
@@ -492,3 +685,4 @@ async def save_form(data: dict):
         return {"message": "Form saved successfully", "id": str(result.inserted_id)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error saving form: {str(e)}")
+    
