@@ -64,14 +64,14 @@ const Home = () => {
   const [comparisonCount, setComparisonCount] = useState(1);
   const [comparisonFiles, setComparisonFiles] = useState([]);
   const [comparisonData, setComparisonData] = useState([]);
-  const [activeComparisonIndex, setActiveComparisonIndex] = useState(null);
+  const [activeComparisonIndices, setActiveComparisonIndices] = useState([]);
   const [comparisonNetworkData, setComparisonNetworkData] = useState([]);
   const [comparisonFilter, setComparisonFilter] = useState("");
   const [minComparisonWeight, setMinComparisonWeight] = useState(1);
   const [comparisonMetrics, setComparisonMetrics] = useState([]);
   const [highlightCommonNodes, setHighlightCommonNodes] = useState(false);
   const [filteredOriginalData, setFilteredOriginalData] = useState(null);
-  const [filteredComparisonData, setFilteredComparisonData] = useState(null);
+  const [filteredComparisonData, setFilteredComparisonData] = useState({});
   const forceGraphRef = useRef(null);
 
   const graphMetrics = [
@@ -99,8 +99,7 @@ const Home = () => {
       setComparisonData([]);
       setComparisonFiles([]);
       setComparisonCount(1);
-      setActiveComparisonIndex(null);
-
+      setActiveComparisonIndices([]);
       if (forceGraphRef.current) {
         forceGraphRef.current.zoomToFit(400, 100);
       }
@@ -389,7 +388,15 @@ const Home = () => {
       setStrongConnectionsActive(true);
     }
   };
-
+  const toggleComparisonActive = (index) => {
+    if (activeComparisonIndices.includes(index)) {
+      setActiveComparisonIndices(
+        activeComparisonIndices.filter((i) => i !== index)
+      );
+    } else {
+      setActiveComparisonIndices([...activeComparisonIndices, index]);
+    }
+  };
   const handleComparisonFileChange = (event, index) => {
     const selectedFile = event.target.files[0];
     if (!selectedFile) return;
@@ -446,7 +453,11 @@ const Home = () => {
           const updatedComparisonData = [...comparisonNetworkData];
           updatedComparisonData[index] = data;
           setComparisonNetworkData(updatedComparisonData);
-          setActiveComparisonIndex(index);
+
+          if (!activeComparisonIndices.includes(index)) {
+            setActiveComparisonIndices([...activeComparisonIndices, index]);
+          }
+
           setMessage(
             `Comparison analysis ${index + 1} completed successfully!`
           );
@@ -545,51 +556,64 @@ const Home = () => {
   const applyComparisonFilters = () => {
     if (
       !originalNetworkData ||
-      !comparisonNetworkData[activeComparisonIndex] ||
+      activeComparisonIndices.length === 0 ||
       !uploadedFile
     ) {
       return;
     }
     const backupNetwork = { ...networkData };
-
     const params = buildNetworkFilterParams();
 
     params.append("original_filename", uploadedFile);
-    params.append(
-      "comparison_filename",
-      comparisonData[activeComparisonIndex].filename
-    );
-    params.append("node_filter", comparisonFilter);
-    params.append("min_weight", minComparisonWeight);
-    params.append("highlight_common", highlightCommonNodes);
 
-    if (comparisonMetrics.length > 0) {
-      params.append("metrics", comparisonMetrics.join(","));
-    }
+    const comparisonPromises = activeComparisonIndices.map((index) => {
+      const comparisonParams = new URLSearchParams(params);
+      comparisonParams.append(
+        "comparison_filename",
+        comparisonData[index].filename
+      );
+      comparisonParams.append("node_filter", comparisonFilter);
+      comparisonParams.append("min_weight", minComparisonWeight);
+      comparisonParams.append("highlight_common", highlightCommonNodes);
 
+      if (comparisonMetrics.length > 0) {
+        comparisonParams.append("metrics", comparisonMetrics.join(","));
+      }
+      return fetch(
+        `http://localhost:8001/analyze/compare-networks?${comparisonParams.toString()}`
+      ).then((response) => response.json());
+    });
     setMessage("Processing network comparison...");
 
-    fetch(`http://localhost:8001/analyze/compare-networks?${params.toString()}`)
-      .then((response) => response.json())
-      .then((data) => {
-        if (data.error) {
-          setMessage(`Error: ${data.error}`);
+    Promise.all(comparisonPromises)
+      .then((results) => {
+        if (results.some((data) => data.error)) {
+          const errors = results
+            .filter((data) => data.error)
+            .map((data) => data.error)
+            .join(", ");
+          setMessage(`Error in comparisons: ${errors}`);
           return;
         }
+        setFilteredOriginalData(standardizeGraphData(results[0].original));
 
-        const processedOriginal = standardizeGraphData(data.original);
-        const processedComparison = standardizeGraphData(data.comparison);
-
-        setFilteredOriginalData(processedOriginal);
-        setFilteredComparisonData(processedComparison);
+        const processedComparisons = {};
+        activeComparisonIndices.forEach((index, arrayIndex) => {
+          processedComparisons[index] = standardizeGraphData(
+            results[arrayIndex].comparison
+          );
+        });
+        setFilteredComparisonData(processedComparisons);
 
         setNetworkData(backupNetwork);
 
-        setMessage("Network comparison completed successfully!");
+        setMessage(
+          `${results.length} network comparisons completed successfully!`
+        );
       })
       .catch((error) => {
-        console.error("Error during network comparison:", error);
-        setMessage("An error occurred during network comparison");
+        console.error("Error during network comparisons:", error);
+        setMessage("An error occurred during network comparisons");
       });
   };
   const resetComparisonFilters = () => {
@@ -598,7 +622,7 @@ const Home = () => {
     setComparisonMetrics([]);
     setHighlightCommonNodes(false);
     setFilteredOriginalData(null);
-    setFilteredComparisonData(null);
+    setFilteredComparisonData({});
   };
   const standardizeGraphData = (graphData) => {
     if (!graphData || !graphData.nodes || !graphData.links) {
@@ -702,8 +726,7 @@ const Home = () => {
           return Math.max(10, node.eigenvector * 60);
         if (comparisonMetrics.includes("PageRank Centrality"))
           return Math.max(10, node.pagerank * 500);
-      }
-      else if (!isComparisonGraph && selectedMetric) {
+      } else if (!isComparisonGraph && selectedMetric) {
         if (selectedMetric === "Degree Centrality")
           return Math.max(10, node.degree * 80);
         if (selectedMetric === "Betweenness Centrality")
@@ -716,7 +739,7 @@ const Home = () => {
           return Math.max(10, node.pagerank * 500);
       }
 
-      return 20; 
+      return 20;
     };
 
     return (
@@ -757,10 +780,10 @@ const Home = () => {
             filteredOriginalData && filteredComparisonData
               ? comparisonMetrics
               : isComparisonGraph
-              ? comparisonMetrics 
+              ? comparisonMetrics
               : selectedMetric
               ? [selectedMetric]
-              : []; 
+              : [];
 
           if (metrics.length > 0) {
             ctx.fillStyle = "black";
@@ -1478,9 +1501,21 @@ const Home = () => {
                     return (
                       <Col md={12} key={index}>
                         <Card className="mt-3 mb-3">
-                          <Card.Header as="h5">
-                            Comparison #{index + 1}:{" "}
-                            {comparisonData[index]?.name || ""}
+                          <Card.Header
+                            as="h5"
+                            className="d-flex justify-content-between"
+                          >
+                            <span>
+                              Comparison #{index + 1}:{" "}
+                              {comparisonData[index]?.name || ""}
+                            </span>
+                            <Form.Check
+                              type="checkbox"
+                              label="Add to comparison view"
+                              checked={activeComparisonIndices.includes(index)}
+                              onChange={() => toggleComparisonActive(index)}
+                              className="mt-1"
+                            />
                           </Card.Header>
                           <Card.Body className="text-center">
                             {renderComparisonGraph(index)}
@@ -1493,128 +1528,130 @@ const Home = () => {
                 })}
               </Row>
 
-              {networkData &&
-                activeComparisonIndex !== null &&
-                comparisonNetworkData[activeComparisonIndex] && (
-                  <Row className="mt-4">
-                    <h4 className="fw-bold">Network Comparison View</h4>
-                    <div className="comparison-toolbar mb-3">
-                      <div className="toolbar-section">
-                        <span className="toolbar-label">Filter:</span>
-                        <input
-                          type="text"
-                          className="toolbar-input"
-                          placeholder="Filter nodes..."
-                          value={comparisonFilter}
-                          onChange={(e) => setComparisonFilter(e.target.value)}
-                        />
-                      </div>
+              {networkData && activeComparisonIndices.length > 0 && (
+                <Row className="mt-4">
+                  <h4 className="fw-bold">Network Comparison View</h4>
+                  <div className="comparison-toolbar mb-3">
+                    <div className="toolbar-section">
+                      <span className="toolbar-label">Filter:</span>
+                      <input
+                        type="text"
+                        className="toolbar-input"
+                        placeholder="Filter nodes..."
+                        value={comparisonFilter}
+                        onChange={(e) => setComparisonFilter(e.target.value)}
+                      />
+                    </div>
 
-                      <div className="toolbar-section">
-                        <span className="toolbar-label">Min Weight:</span>
-                        <input
-                          type="number"
-                          className="toolbar-input"
-                          min="1"
-                          value={minComparisonWeight}
-                          onChange={(e) =>
-                            setMinComparisonWeight(
-                              parseInt(e.target.value) || 1
-                            )
-                          }
-                        />
-                      </div>
+                    <div className="toolbar-section">
+                      <span className="toolbar-label">Min Weight:</span>
+                      <input
+                        type="number"
+                        className="toolbar-input"
+                        min="1"
+                        value={minComparisonWeight}
+                        onChange={(e) =>
+                          setMinComparisonWeight(parseInt(e.target.value) || 1)
+                        }
+                      />
+                    </div>
 
-                      <div className="toolbar-section metrics-toggles">
-                        <span className="toolbar-label">Metrics:</span>
-                        <div className="toolbar-buttons">
-                          {graphMetrics.slice(0, 5).map((metric) => (
-                            <button
-                              key={metric}
-                              className={`toolbar-button ${
-                                comparisonMetrics.includes(metric)
-                                  ? "active"
-                                  : ""
-                              }`}
-                              onClick={() => toggleComparisonMetric(metric)}
-                              title={metric}
-                            >
-                              {metric.split(" ")[0]}
-                            </button>
-                          ))}
+                    <div className="toolbar-section metrics-toggles">
+                      <span className="toolbar-label">Metrics:</span>
+                      <div className="toolbar-buttons">
+                        {graphMetrics.slice(0, 5).map((metric) => (
                           <button
+                            key={metric}
                             className={`toolbar-button ${
-                              highlightCommonNodes ? "active" : ""
+                              comparisonMetrics.includes(metric) ? "active" : ""
                             }`}
-                            onClick={() =>
-                              setHighlightCommonNodes(!highlightCommonNodes)
-                            }
-                            title="Highlight Common Nodes"
+                            onClick={() => toggleComparisonMetric(metric)}
+                            title={metric}
                           >
-                            Common
+                            {metric.split(" ")[0]}
                           </button>
-                        </div>
-                      </div>
-
-                      <div className="toolbar-section">
+                        ))}
                         <button
-                          className="toolbar-action-btn"
-                          onClick={applyComparisonFilters}
+                          className={`toolbar-button ${
+                            highlightCommonNodes ? "active" : ""
+                          }`}
+                          onClick={() =>
+                            setHighlightCommonNodes(!highlightCommonNodes)
+                          }
+                          title="Highlight Common Nodes"
                         >
-                          Apply
-                        </button>
-                        <button
-                          className="toolbar-action-btn outline"
-                          onClick={resetComparisonFilters}
-                        >
-                          Reset
+                          Common
                         </button>
                       </div>
                     </div>
 
-                    <Col md={6}>
-                      <Card>
-                        <Card.Header as="h5">Original Network</Card.Header>
-                        <Card.Body className="text-center">
-                          <GraphContainer>
-                            {renderForceGraph(
-                              filteredOriginalData || {
-                                nodes: originalNetworkData
-                                  ? [...originalNetworkData.nodes]
-                                  : [...networkData.nodes],
-                                links: originalNetworkData
-                                  ? [...originalNetworkData.links]
-                                  : [...networkData.links],
-                              },
-                              600,
-                              500,
-                              false
-                            )}
-                          </GraphContainer>
-                        </Card.Body>
-                      </Card>
-                    </Col>
-                    <Col md={6}>
+                    <div className="toolbar-section">
+                      <button
+                        className="toolbar-action-btn"
+                        onClick={applyComparisonFilters}
+                      >
+                        Apply
+                      </button>
+                      <button
+                        className="toolbar-action-btn outline"
+                        onClick={resetComparisonFilters}
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+
+                  <Col
+                    md={activeComparisonIndices.length > 1 ? 12 : 6}
+                    className="mb-4"
+                  >
+                    <Card>
+                      <Card.Header as="h5">Original Network</Card.Header>
+                      <Card.Body className="text-center">
+                        <GraphContainer>
+                          {renderForceGraph(
+                            filteredOriginalData || {
+                              nodes: originalNetworkData
+                                ? [...originalNetworkData.nodes]
+                                : [...networkData.nodes],
+                              links: originalNetworkData
+                                ? [...originalNetworkData.links]
+                                : [...networkData.links],
+                            },
+                            activeComparisonIndices.length > 1 ? 1000 : 600,
+                            500,
+                            false
+                          )}
+                        </GraphContainer>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+
+                  {activeComparisonIndices.map((index) => (
+                    <Col
+                      md={activeComparisonIndices.length > 1 ? 6 : 6}
+                      key={`comparison-${index}`}
+                      className="mb-4"
+                    >
                       <Card>
                         <Card.Header as="h5">
-                          Comparison Network #{activeComparisonIndex + 1}
+                          Comparison Network #{index + 1}
                         </Card.Header>
                         <Card.Body className="text-center">
                           <GraphContainer>
                             {renderForceGraph(
-                              filteredComparisonData || {
-                                nodes: [
-                                  ...comparisonNetworkData[
-                                    activeComparisonIndex
-                                  ].nodes,
-                                ],
-                                links: [
-                                  ...comparisonNetworkData[
-                                    activeComparisonIndex
-                                  ].links,
-                                ],
-                              },
-                              600,
+                              filteredComparisonData &&
+                                filteredComparisonData[index]
+                                ? filteredComparisonData[index]
+                                : {
+                                    nodes: [
+                                      ...comparisonNetworkData[index].nodes,
+                                    ],
+                                    links: [
+                                      ...comparisonNetworkData[index].links,
+                                    ],
+                                  },
+                              activeComparisonIndices.length > 2 ? 600 : 600,
                               500,
                               true
                             )}
@@ -1622,86 +1659,92 @@ const Home = () => {
                         </Card.Body>
                       </Card>
                     </Col>
-                  </Row>
-                )}
+                  ))}
+                </Row>
+              )}
             </Card>
           </Row>
-          {networkData &&
-            activeComparisonIndex !== null &&
-            comparisonNetworkData[activeComparisonIndex] && (
-              <Row className="mt-4 mb-4">
-                <Card>
-                  <Card.Header>
-                    <h5 className="fw-bold">Comparison Statistics</h5>
-                  </Card.Header>
-                  <Card.Body>
-                    {(() => {
-                      const compData =
-                        comparisonNetworkData[activeComparisonIndex];
-                      const stats = calculateComparisonStats(
-                        networkData,
-                        compData
-                      );
-
-                      if (!stats)
-                        return (
-                          <p>Could not calculate comparison statistics.</p>
+          {networkData && activeComparisonIndices.length > 0 && (
+            <Row className="mt-4 mb-4">
+              <Card>
+                <Card.Header>
+                  <h5 className="fw-bold">Comparison Statistics</h5>
+                </Card.Header>
+                <Card.Body>
+                  {activeComparisonIndices.map((index) => (
+                    <div key={`stats-${index}`} className="mb-4">
+                      <h6>
+                        Statistics for Comparison #{index + 1}:{" "}
+                        {comparisonData[index]?.name || ""}
+                      </h6>
+                      {(() => {
+                        const compData = comparisonNetworkData[index];
+                        const stats = calculateComparisonStats(
+                          networkData,
+                          compData
                         );
 
-                      return (
-                        <Table responsive striped bordered hover>
-                          <thead>
-                            <tr>
-                              <th>Metric</th>
-                              <th>Original Network</th>
-                              <th>Comparison Network</th>
-                              <th>Difference</th>
-                              <th>Change %</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr>
-                              <td>Node Count</td>
-                              <td>{stats.originalNodeCount}</td>
-                              <td>{stats.comparisonNodeCount}</td>
-                              <td>
-                                {stats.nodeDifference > 0
-                                  ? `+${stats.nodeDifference}`
-                                  : stats.nodeDifference}
-                              </td>
-                              <td>{stats.nodeChangePercent}%</td>
-                            </tr>
-                            <tr>
-                              <td>Edge Count</td>
-                              <td>{stats.originalLinkCount}</td>
-                              <td>{stats.comparisonLinkCount}</td>
-                              <td>
-                                {stats.linkDifference > 0
-                                  ? `+${stats.linkDifference}`
-                                  : stats.linkDifference}
-                              </td>
-                              <td>{stats.linkChangePercent}%</td>
-                            </tr>
-                            <tr>
-                              <td>Common Nodes</td>
-                              <td colSpan="2">{stats.commonNodesCount}</td>
-                              <td colSpan="2">
-                                {(
-                                  (stats.commonNodesCount /
-                                    stats.originalNodeCount) *
-                                  100
-                                ).toFixed(2)}
-                                % of original network
-                              </td>
-                            </tr>
-                          </tbody>
-                        </Table>
-                      );
-                    })()}
-                  </Card.Body>
-                </Card>
-              </Row>
-            )}
+                        if (!stats)
+                          return (
+                            <p>Could not calculate comparison statistics.</p>
+                          );
+
+                        return (
+                          <Table responsive striped bordered hover>
+                            <thead>
+                              <tr>
+                                <th>Metric</th>
+                                <th>Original Network</th>
+                                <th>Comparison Network</th>
+                                <th>Difference</th>
+                                <th>Change %</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                <td>Node Count</td>
+                                <td>{stats.originalNodeCount}</td>
+                                <td>{stats.comparisonNodeCount}</td>
+                                <td>
+                                  {stats.nodeDifference > 0
+                                    ? `+${stats.nodeDifference}`
+                                    : stats.nodeDifference}
+                                </td>
+                                <td>{stats.nodeChangePercent}%</td>
+                              </tr>
+                              <tr>
+                                <td>Edge Count</td>
+                                <td>{stats.originalLinkCount}</td>
+                                <td>{stats.comparisonLinkCount}</td>
+                                <td>
+                                  {stats.linkDifference > 0
+                                    ? `+${stats.linkDifference}`
+                                    : stats.linkDifference}
+                                </td>
+                                <td>{stats.linkChangePercent}%</td>
+                              </tr>
+                              <tr>
+                                <td>Common Nodes</td>
+                                <td colSpan="2">{stats.commonNodesCount}</td>
+                                <td colSpan="2">
+                                  {(
+                                    (stats.commonNodesCount /
+                                      stats.originalNodeCount) *
+                                    100
+                                  ).toFixed(2)}
+                                  % of original network
+                                </td>
+                              </tr>
+                            </tbody>
+                          </Table>
+                        );
+                      })()}
+                    </div>
+                  ))}
+                </Card.Body>
+              </Card>
+            </Row>
+          )}
         </div>
       )}
     </Container>

@@ -504,7 +504,6 @@ def apply_comparison_filters(network_data, node_filter, min_weight):
     if not network_data or "nodes" not in network_data or "links" not in network_data:
         return network_data
     
-    # Filter nodes by text
     filtered_nodes = []
     if node_filter:
         filtered_nodes = [
@@ -514,10 +513,8 @@ def apply_comparison_filters(network_data, node_filter, min_weight):
     else:
         filtered_nodes = network_data["nodes"]
     
-    # Create a set of node IDs for efficient lookup
     node_ids = {node["id"] for node in filtered_nodes}
     
-    # Filter links by minimum weight and node existence
     filtered_links = [
         link for link in network_data["links"]
         if (link["weight"] >= min_weight and
@@ -553,7 +550,6 @@ def get_network_metrics(original_data, comparison_data, metrics_list):
     metrics_names = [m.strip() for m in metrics_list.split(",")]
     results = {}
     
-    # Calculate basic metrics
     results["node_count"] = {
         "original": len(original_data["nodes"]),
         "comparison": len(comparison_data["nodes"]),
@@ -574,8 +570,6 @@ def get_network_metrics(original_data, comparison_data, metrics_list):
         )
     }
     
-    # Add more metrics based on the requested list
-    # Here you can calculate advanced metrics like density, diameter, etc.
     
     return results
 
@@ -598,16 +592,14 @@ async def analyze_network_comparison(
     selected_users: str = Query(None), 
     username: str = Query(None),
     anonymize: bool = Query(False),
-    # New parameters for comparison filtering
     min_weight: int = Query(1),
     node_filter: str = Query(""),
     highlight_common: bool = Query(False),
-    metrics: str = Query(None)  # Comma-separated list of metrics
+    metrics: str = Query(None)  
 ):
     try:
         print(f"Analyzing comparison between {original_filename} and {comparison_filename}")
         
-        # Get original network data
         original_result = await analyze_network(
             original_filename, start_date, start_time, end_date, end_time,
             limit, limit_type, min_length, max_length, keywords,
@@ -615,7 +607,6 @@ async def analyze_network_comparison(
             username, anonymize
         )
         
-        # Get comparison network data
         comparison_result = await analyze_network(
             comparison_filename, start_date, start_time, end_date, end_time,
             limit, limit_type, min_length, max_length, keywords,
@@ -623,7 +614,6 @@ async def analyze_network_comparison(
             username, anonymize
         )
         
-        # Convert results to JSON if they aren't already
         if hasattr(original_result, 'body'):
             original_data = json.loads(original_result.body)
         else:
@@ -634,17 +624,14 @@ async def analyze_network_comparison(
         else:
             comparison_data = comparison_result
         
-        # Apply additional filters to both networks
         filtered_original = apply_comparison_filters(original_data, node_filter, min_weight)
         filtered_comparison = apply_comparison_filters(comparison_data, node_filter, min_weight)
         
-        # Mark common nodes if requested
         if highlight_common:
             common_nodes = find_common_nodes(filtered_original, filtered_comparison)
             mark_common_nodes(filtered_original, common_nodes)
             mark_common_nodes(filtered_comparison, common_nodes)
         
-        # Return both filtered networks
         return JSONResponse(content={
             "original": filtered_original,
             "comparison": filtered_comparison,
