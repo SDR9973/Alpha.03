@@ -1205,11 +1205,12 @@ const Home = () => {
                     </div>
                   )}
                 </Card>
-                <Card className="metrics-card">
+                <Card className="metrics-card my-2">
                   <h4 className="fw-bold d-flex justify-content-between align-items-center">
                     Network Metrics
                     <Button
                       variant="link"
+                      className="metrics-toggle"
                       onClick={() => setShowNetworkStats(!showNetworkStats)}
                     >
                       {showNetworkStats ? (
