@@ -23,6 +23,7 @@ import "./Home.css";
 // Import custom styles
 import { AlertBox, GraphContainer } from "./Form.style.js";
 import AnonymizationToggle from "../components/AnonymizationToggle.jsx";
+import NetworkCustomizationToolbar from "../components/NetworkCustomizationToolbar.jsx";
 // import WikipediaDataFetcher from "../components/WikipediaDataFetcher.jsx";
 
 const Home = () => {
@@ -62,13 +63,52 @@ const Home = () => {
   const [limitType, setLimitType] = useState("first");
   const [originalNetworkData, setOriginalNetworkData] = useState(null);
   const [strongConnectionsActive, setStrongConnectionsActive] = useState(false);
-  const [highlightCentralNodes, setHighlightCentralNodes] = useState(false);
+  const [comparisonCount, setComparisonCount] = useState(1);
+  const [comparisonFiles, setComparisonFiles] = useState([]);
+  const [comparisonData, setComparisonData] = useState([]);
+  const [activeComparisonIndices, setActiveComparisonIndices] = useState([]);
+  const [comparisonNetworkData, setComparisonNetworkData] = useState([]);
+  const [comparisonFilter, setComparisonFilter] = useState("");
+  const [minComparisonWeight, setMinComparisonWeight] = useState(1);
+  const [comparisonMetrics, setComparisonMetrics] = useState([]);
+  const [highlightCommonNodes, setHighlightCommonNodes] = useState(false);
+  const [filteredOriginalData, setFilteredOriginalData] = useState(null);
+  const [filteredComparisonData, setFilteredComparisonData] = useState({});
+  const [communities, setCommunities] = useState([]);
+  const [customizedNetworkData, setCustomizedNetworkData] = useState(null);  const [highlightCentralNodes, setHighlightCentralNodes] = useState(false);
   const [selectedNode, setSelectedNode] = useState(null);
   const [nodeToRemove, setNodeToRemove] = useState(null);
   const [showRemoveNodeModal, setShowRemoveNodeModal] = useState(false);
   const [activityFilterEnabled, setActivityFilterEnabled] = useState(false);
   const [activityThreshold, setActivityThreshold] = useState(2); // Default: nodes with at least 2 connections
   const forceGraphRef = useRef(null);
+
+  const [visualizationSettings, setVisualizationSettings] = useState({
+    colorBy: "default",
+    sizeBy: "default",
+    highlightUsers: [],
+    highlightCommunities: [],
+    customColors: {
+      defaultNodeColor: "#050d2d",
+      highlightNodeColor: "#00c6c2",
+      communityColors: [
+        "#313659",
+        "#5f6289",
+        "#324b4a",
+        "#158582",
+        "#9092bc",
+        "#c4c6f1",
+      ],
+      edgeColor: "rgba(128, 128, 128, 0.6)",
+    },
+    nodeSizes: {
+      min: 10,
+      max: 30,
+    },
+    colorScheme: "default",
+    showImportantNodes: false,
+    importantNodesThreshold: 0.5,
+  });
 
   const graphMetrics = [
     "Degree Centrality",
@@ -91,6 +131,11 @@ const Home = () => {
       setMessageLimit(50);
       setKeywords("");
       setInputKey(Date.now());
+      setComparisonNetworkData([]);
+      setComparisonData([]);
+      setComparisonFiles([]);
+      setComparisonCount(1);
+      setActiveComparisonIndices([]);
       if (forceGraphRef.current) {
         forceGraphRef.current.zoomToFit(400, 100);
       }
@@ -179,26 +224,14 @@ const Home = () => {
   };
 
   const handleNetworkAnalysis = () => {
-    let url = `http://localhost:8001/analyze/network/${uploadedFile}`;
-    const params = new URLSearchParams();
-    if (startDate) params.append("start_date", startDate);
-    if (endDate) params.append("end_date", endDate);
-    if (messageLimit) params.append("limit", messageLimit);
-    if (minMessageLength) params.append("min_length", minMessageLength);
-    if (maxMessageLength) params.append("max_length", maxMessageLength);
-    if (keywords) params.append("keywords", keywords);
-    if (usernameFilter) params.append("username", usernameFilter);
-    if (minMessages) params.append("min_messages", minMessages);
-    if (maxMessages) params.append("max_messages", maxMessages);
-    if (activeUsers) params.append("active_users", activeUsers);
-    if (selectedUsers) params.append("selected_users", selectedUsers);
-    if (startTime) params.append("start_time", formatTime(startTime));
-    if (endTime) params.append("end_time", formatTime(endTime));
-    if (limitType) params.append("limit_type", limitType);
+    if (!uploadedFile) {
+      setMessage("No file selected for analysis.");
+      return;
+    }
 
-    params.append("anonymize", isAnonymized ? "true" : "false");
+    const params = buildNetworkFilterParams();
+    const url = `http://localhost:8001/analyze/network/${uploadedFile}?${params.toString()}`;
 
-    url += `?${params.toString()}`;
     console.log("Request URL:", url);
     fetch(url)
       .then((response) => response.json())
@@ -206,9 +239,8 @@ const Home = () => {
         console.log("Data returned from server:", data);
         if (data.nodes && data.links) {
           setNetworkData(data);
-        }
-        if (!originalNetworkData) {
-          setOriginalNetworkData(data); // שמירת העותק
+          setOriginalNetworkData(data);
+          fetchCommunityData();
         } else {
           setMessage("No data returned from server.");
         }
@@ -391,6 +423,636 @@ const Home = () => {
       setNetworkData({ nodes: filteredNodes, links: filteredLinks });
       setStrongConnectionsActive(true);
     }
+  };
+  const toggleComparisonActive = (index) => {
+    if (activeComparisonIndices.includes(index)) {
+      setActiveComparisonIndices(
+        activeComparisonIndices.filter((i) => i !== index)
+      );
+    } else {
+      setActiveComparisonIndices([...activeComparisonIndices, index]);
+    }
+  };
+  const handleComparisonFileChange = (event, index) => {
+    const selectedFile = event.target.files[0];
+    if (!selectedFile) return;
+
+    const updatedFiles = [...comparisonFiles];
+    updatedFiles[index] = selectedFile;
+    setComparisonFiles(updatedFiles);
+
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+
+    fetch("http://localhost:8001/upload", {
+      method: "POST",
+      body: formData,
+      headers: { Accept: "application/json" },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.filename) {
+          const updatedData = [...comparisonData];
+          updatedData[index] = {
+            id: index,
+            filename: data.filename,
+            name: selectedFile.name,
+          };
+          setComparisonData(updatedData);
+          console.log(`Comparison file ${index} uploaded: ${data.filename}`);
+        }
+      })
+      .catch(() => {
+        console.error("Error uploading comparison file");
+        setMessage("An error occurred during comparison file upload.");
+      });
+  };
+
+  const handleComparisonAnalysis = (index) => {
+    const comparisonFile = comparisonData[index];
+    if (!comparisonFile || !comparisonFile.filename) {
+      setMessage("Please select a comparison file first.");
+      return;
+    }
+
+    const params = buildNetworkFilterParams();
+    const url = `http://localhost:8001/analyze/network/${
+      comparisonFile.filename
+    }?${params.toString()}`;
+
+    console.log(`Analyzing comparison file ${index}: ${url}`);
+    fetch(url)
+      .then((response) => response.json())
+      .then((data) => {
+        console.log(`Comparison data ${index} returned:`, data);
+        if (data.nodes && data.links) {
+          const updatedComparisonData = [...comparisonNetworkData];
+          updatedComparisonData[index] = data;
+          setComparisonNetworkData(updatedComparisonData);
+
+          if (!activeComparisonIndices.includes(index)) {
+            setActiveComparisonIndices([...activeComparisonIndices, index]);
+          }
+
+          setMessage(
+            `Comparison analysis ${index + 1} completed successfully!`
+          );
+        } else {
+          setMessage(`No valid data returned for comparison ${index + 1}.`);
+        }
+      })
+      .catch((err) => {
+        setMessage(`Error analyzing comparison file ${index + 1}.`);
+        console.error(`Error during comparison analysis ${index}:`, err);
+      });
+  };
+
+  const renderComparisonGraph = (index) => {
+    const compData = comparisonNetworkData[index];
+    if (!compData || !compData.nodes || !compData.links) {
+      return <div>No data available for this comparison</div>;
+    }
+
+    const filteredNodes = compData.nodes.filter((node) =>
+      node.id.toLowerCase().includes(filter.toLowerCase())
+    );
+
+    const filteredLinks = compData.links.filter(
+      (link) =>
+        filteredNodes.some(
+          (node) =>
+            node.id === link.source ||
+            (typeof link.source === "object" && node.id === link.source.id)
+        ) &&
+        filteredNodes.some(
+          (node) =>
+            node.id === link.target ||
+            (typeof link.target === "object" && node.id === link.target.id)
+        )
+    );
+  };
+
+  const calculateComparisonStats = (originalData, comparisonData) => {
+    if (!originalData || !comparisonData) {
+      return null;
+    }
+
+    const originalNodeCount = originalData.nodes.length;
+    const comparisonNodeCount = comparisonData.nodes.length;
+    const originalLinkCount = originalData.links.length;
+    const comparisonLinkCount = comparisonData.links.length;
+
+    const nodeDifference = comparisonNodeCount - originalNodeCount;
+    const linkDifference = comparisonLinkCount - originalLinkCount;
+
+    const nodeChangePercent = originalNodeCount
+      ? (
+          ((comparisonNodeCount - originalNodeCount) / originalNodeCount) *
+          100
+        ).toFixed(2)
+      : 0;
+    const linkChangePercent = originalLinkCount
+      ? (
+          ((comparisonLinkCount - originalLinkCount) / originalLinkCount) *
+          100
+        ).toFixed(2)
+      : 0;
+
+    const originalNodeIds = new Set(originalData.nodes.map((node) => node.id));
+    const comparisonNodeIds = new Set(
+      comparisonData.nodes.map((node) => node.id)
+    );
+
+    const commonNodes = [...originalNodeIds].filter((id) =>
+      comparisonNodeIds.has(id)
+    );
+    const commonNodesCount = commonNodes.length;
+
+    return {
+      originalNodeCount,
+      comparisonNodeCount,
+      originalLinkCount,
+      comparisonLinkCount,
+      nodeDifference,
+      linkDifference,
+      nodeChangePercent,
+      linkChangePercent,
+      commonNodesCount,
+    };
+  };
+  const fetchCommunityData = () => {
+    if (!uploadedFile) {
+      setMessage("No file selected for community detection.");
+      return;
+    }
+
+    const params = buildNetworkFilterParams();
+    params.append("algorithm", "louvain");
+
+    const url = `http://localhost:8001/analyze/communities/${uploadedFile}?${params.toString()}`;
+
+    console.log("Community detection URL:", url);
+    fetch(url)
+      .then((response) => response.json())
+      .then((data) => {
+        console.log("Community data returned from server:", data);
+        if (data.communities && data.nodes) {
+          setCommunities(data.communities);
+
+          if (networkData && networkData.nodes) {
+            const updatedNodes = networkData.nodes.map((node) => {
+              const matchingNode = data.nodes.find((n) => n.id === node.id);
+              if (matchingNode && matchingNode.community !== undefined) {
+                return { ...node, community: matchingNode.community };
+              }
+              return node;
+            });
+
+            setNetworkData({
+              nodes: updatedNodes,
+              links: networkData.links,
+            });
+            setOriginalNetworkData({
+              nodes: updatedNodes,
+              links: networkData.links,
+            });
+          }
+
+          setMessage(
+            `Detected ${data.communities.length} communities in the network.`
+          );
+        } else {
+          setMessage("No community data returned from server.");
+        }
+      })
+      .catch((err) => {
+        setMessage("An error occurred during community detection.");
+        console.error("Error during community detection:", err);
+      });
+  };
+
+  const handleNetworkCustomization = (settings) => {
+    setVisualizationSettings(settings);
+    console.log("Applying visualization settings:", settings);
+
+    if (!networkData) return;
+
+    const customizedNodes = JSON.parse(JSON.stringify(networkData.nodes));
+    const customizedLinks = JSON.parse(JSON.stringify(networkData.links));
+
+    for (const node of customizedNodes) {
+      let nodeSize = settings.nodeSizes.min;
+      let nodeColor = settings.customColors.defaultNodeColor;
+
+      if (settings.sizeBy === "messages") {
+        const maxMessages = Math.max(
+          ...customizedNodes.map((n) => n.messages || 0)
+        );
+        const sizeRatio =
+          maxMessages > 0 ? (node.messages || 0) / maxMessages : 0;
+        nodeSize =
+          settings.nodeSizes.min +
+          sizeRatio * (settings.nodeSizes.max - settings.nodeSizes.min);
+      } else if (settings.sizeBy === "degree") {
+        const maxDegree = Math.max(
+          ...customizedNodes.map((n) => n.degree || 0)
+        );
+        const sizeRatio = maxDegree > 0 ? (node.degree || 0) / maxDegree : 0;
+        nodeSize =
+          settings.nodeSizes.min +
+          sizeRatio * (settings.nodeSizes.max - settings.nodeSizes.min);
+      } else if (settings.sizeBy === "betweenness") {
+        const maxBetweenness = Math.max(
+          ...customizedNodes.map((n) => n.betweenness || 0)
+        );
+        const sizeRatio =
+          maxBetweenness > 0 ? (node.betweenness || 0) / maxBetweenness : 0;
+        nodeSize =
+          settings.nodeSizes.min +
+          sizeRatio * (settings.nodeSizes.max - settings.nodeSizes.min);
+      } else if (settings.sizeBy === "pagerank") {
+        const maxPageRank = Math.max(
+          ...customizedNodes.map((n) => n.pagerank || 0)
+        );
+        const sizeRatio =
+          maxPageRank > 0 ? (node.pagerank || 0) / maxPageRank : 0;
+        nodeSize =
+          settings.nodeSizes.min +
+          sizeRatio * (settings.nodeSizes.max - settings.nodeSizes.min);
+      }
+
+      if (settings.colorBy === "community" && node.community !== undefined) {
+        const communityId = node.community;
+        const communityColors = settings.communityColors || {};
+        const defaultColors = settings.customColors.communityColors;
+        nodeColor =
+          communityColors[communityId] ||
+          defaultColors[communityId % defaultColors.length];
+      } else if (settings.colorBy === "degree") {
+        const maxDegree = Math.max(
+          ...customizedNodes.map((n) => n.degree || 0)
+        );
+        const ratio = maxDegree > 0 ? (node.degree || 0) / maxDegree : 0;
+        nodeColor = interpolateColor(
+          "#FFFFFF",
+          settings.customColors.defaultNodeColor,
+          ratio
+        );
+      } else if (settings.colorBy === "betweenness") {
+        const maxBetweenness = Math.max(
+          ...customizedNodes.map((n) => n.betweenness || 0)
+        );
+        const ratio =
+          maxBetweenness > 0 ? (node.betweenness || 0) / maxBetweenness : 0;
+        nodeColor = interpolateColor("#FFFFFF", "#FF5733", ratio);
+      } else if (settings.colorBy === "pagerank") {
+        const maxPageRank = Math.max(
+          ...customizedNodes.map((n) => n.pagerank || 0)
+        );
+        const ratio = maxPageRank > 0 ? (node.pagerank || 0) / maxPageRank : 0;
+        nodeColor = interpolateColor("#FFFFFF", "#3366CC", ratio);
+      } else if (settings.colorBy === "custom") {
+        if (settings.highlightUsers.includes(node.id)) {
+          nodeColor = settings.customColors.highlightNodeColor;
+        }
+      }
+
+      if (
+        node.community !== undefined &&
+        settings.highlightCommunities.includes(node.community)
+      ) {
+        nodeColor = settings.customColors.highlightNodeColor;
+      }
+
+      if (settings.showImportantNodes) {
+        const threshold = settings.importantNodesThreshold || 0.5;
+        const maxBetweenness = Math.max(
+          ...customizedNodes.map((n) => n.betweenness || 0)
+        );
+        const maxPageRank = Math.max(
+          ...customizedNodes.map((n) => n.pagerank || 0)
+        );
+
+        if (
+          node.betweenness / maxBetweenness > threshold ||
+          node.pagerank / maxPageRank > threshold
+        ) {
+          nodeColor = settings.customColors.highlightNodeColor;
+          nodeSize = Math.max(nodeSize, settings.nodeSizes.max * 0.8);
+        }
+      }
+
+      node.size = nodeSize;
+      node.color = nodeColor;
+    }
+
+    setCustomizedNetworkData({
+      nodes: customizedNodes,
+      links: customizedLinks,
+    });
+  };
+
+  const interpolateColor = (color1, color2, ratio) => {
+    const r1 = parseInt(color1.substring(1, 3), 16);
+    const g1 = parseInt(color1.substring(3, 5), 16);
+    const b1 = parseInt(color1.substring(5, 7), 16);
+
+    const r2 = parseInt(color2.substring(1, 3), 16);
+    const g2 = parseInt(color2.substring(3, 5), 16);
+    const b2 = parseInt(color2.substring(5, 7), 16);
+
+    const r = Math.round(r1 + (r2 - r1) * ratio);
+    const g = Math.round(g1 + (g2 - g1) * ratio);
+    const b = Math.round(b1 + (b2 - b1) * ratio);
+
+    return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
+  };
+  const toggleComparisonMetric = (metric) => {
+    if (comparisonMetrics.includes(metric)) {
+      setComparisonMetrics(comparisonMetrics.filter((m) => m !== metric));
+    } else {
+      setComparisonMetrics([...comparisonMetrics, metric]);
+    }
+  };
+
+  const applyComparisonFilters = () => {
+    if (
+      !originalNetworkData ||
+      activeComparisonIndices.length === 0 ||
+      !uploadedFile
+    ) {
+      return;
+    }
+    const backupNetwork = { ...networkData };
+    const params = buildNetworkFilterParams();
+
+    params.append("original_filename", uploadedFile);
+
+    const comparisonPromises = activeComparisonIndices.map((index) => {
+      const comparisonParams = new URLSearchParams(params);
+      comparisonParams.append(
+        "comparison_filename",
+        comparisonData[index].filename
+      );
+      comparisonParams.append("node_filter", comparisonFilter);
+      comparisonParams.append("min_weight", minComparisonWeight);
+      comparisonParams.append("highlight_common", highlightCommonNodes);
+
+      if (comparisonMetrics.length > 0) {
+        comparisonParams.append("metrics", comparisonMetrics.join(","));
+      }
+      return fetch(
+        `http://localhost:8001/analyze/compare-networks?${comparisonParams.toString()}`
+      ).then((response) => response.json());
+    });
+    setMessage("Processing network comparison...");
+
+    Promise.all(comparisonPromises)
+      .then((results) => {
+        if (results.some((data) => data.error)) {
+          const errors = results
+            .filter((data) => data.error)
+            .map((data) => data.error)
+            .join(", ");
+          setMessage(`Error in comparisons: ${errors}`);
+          return;
+        }
+        setFilteredOriginalData(standardizeGraphData(results[0].original));
+
+        const processedComparisons = {};
+        activeComparisonIndices.forEach((index, arrayIndex) => {
+          processedComparisons[index] = standardizeGraphData(
+            results[arrayIndex].comparison
+          );
+        });
+        setFilteredComparisonData(processedComparisons);
+
+        setNetworkData(backupNetwork);
+
+        setMessage(
+          `${results.length} network comparisons completed successfully!`
+        );
+      })
+      .catch((error) => {
+        console.error("Error during network comparisons:", error);
+        setMessage("An error occurred during network comparisons");
+      });
+  };
+  const resetComparisonFilters = () => {
+    setComparisonFilter("");
+    setMinComparisonWeight(1);
+    setComparisonMetrics([]);
+    setHighlightCommonNodes(false);
+    setFilteredOriginalData(null);
+    setFilteredComparisonData({});
+  };
+  const standardizeGraphData = (graphData) => {
+    if (!graphData || !graphData.nodes || !graphData.links) {
+      return graphData;
+    }
+
+    const nodeMap = {};
+    graphData.nodes.forEach((node) => {
+      nodeMap[node.id] = node;
+    });
+
+    const standardizedLinks = graphData.links.map((link) => {
+      const sourceId =
+        typeof link.source === "object" ? link.source.id : link.source;
+      const targetId =
+        typeof link.target === "object" ? link.target.id : link.target;
+
+      if (!nodeMap[sourceId] || !nodeMap[targetId]) {
+        console.warn(`Invalid link: source=${sourceId}, target=${targetId}`);
+      }
+
+      return {
+        source: sourceId,
+        target: targetId,
+        weight: link.weight || 1,
+      };
+    });
+
+    return {
+      nodes: graphData.nodes,
+      links: standardizedLinks,
+    };
+  };
+  const buildNetworkFilterParams = () => {
+    const params = new URLSearchParams();
+    if (startDate) params.append("start_date", startDate);
+    if (endDate) params.append("end_date", endDate);
+    if (messageLimit) params.append("limit", messageLimit);
+    if (minMessageLength) params.append("min_length", minMessageLength);
+    if (maxMessageLength) params.append("max_length", maxMessageLength);
+    if (keywords) params.append("keywords", keywords);
+    if (usernameFilter) params.append("username", usernameFilter);
+    if (minMessages) params.append("min_messages", minMessages);
+    if (maxMessages) params.append("max_messages", maxMessages);
+    if (activeUsers) params.append("active_users", activeUsers);
+    if (selectedUsers) params.append("selected_users", selectedUsers);
+    if (startTime) params.append("start_time", formatTime(startTime));
+    if (endTime) params.append("end_time", formatTime(endTime));
+    if (limitType) params.append("limit_type", limitType);
+    params.append("anonymize", isAnonymized ? "true" : "false");
+
+    return params;
+  };
+  const renderForceGraph = (
+    graphData,
+    width,
+    height,
+    isComparisonGraph = false
+  ) => {
+    if (!graphData || !graphData.nodes || !graphData.links) {
+      return <div>No data available</div>;
+    }
+
+    const processedData = {
+      nodes: [...graphData.nodes],
+      links: graphData.links.map((link) => {
+        const sourceId =
+          typeof link.source === "object" ? link.source.id : link.source;
+        const targetId =
+          typeof link.target === "object" ? link.target.id : link.target;
+
+        const sourceNode = graphData.nodes.find((n) => n.id === sourceId);
+        const targetNode = graphData.nodes.find((n) => n.id === targetId);
+
+        return {
+          source: sourceNode || sourceId,
+          target: targetNode || targetId,
+          weight: link.weight || 1,
+        };
+      }),
+    };
+
+    const baseColor = isComparisonGraph ? "purple" : "blue";
+    const linkColor = isComparisonGraph
+      ? "rgba(128, 0, 128, 0.6)"
+      : "rgba(128, 128, 128, 0.6)";
+
+    const getNodeSize = (node) => {
+      if (!node) return 20;
+
+      if (filteredOriginalData && filteredComparisonData) {
+        if (comparisonMetrics.includes("Degree Centrality"))
+          return Math.max(10, node.degree * 80);
+        if (comparisonMetrics.includes("Betweenness Centrality"))
+          return Math.max(10, node.betweenness * 80);
+        if (comparisonMetrics.includes("Closeness Centrality"))
+          return Math.max(10, node.closeness * 50);
+        if (comparisonMetrics.includes("Eigenvector Centrality"))
+          return Math.max(10, node.eigenvector * 60);
+        if (comparisonMetrics.includes("PageRank Centrality"))
+          return Math.max(10, node.pagerank * 500);
+      } else if (!isComparisonGraph && selectedMetric) {
+        if (selectedMetric === "Degree Centrality")
+          return Math.max(10, node.degree * 80);
+        if (selectedMetric === "Betweenness Centrality")
+          return Math.max(10, node.betweenness * 80);
+        if (selectedMetric === "Closeness Centrality")
+          return Math.max(10, node.closeness * 50);
+        if (selectedMetric === "Eigenvector Centrality")
+          return Math.max(10, node.eigenvector * 60);
+        if (selectedMetric === "PageRank Centrality")
+          return Math.max(10, node.pagerank * 500);
+      }
+
+      return 20;
+    };
+    return (
+      <ForceGraph2D
+        graphData={processedData}
+        width={width}
+        height={height}
+        fitView
+        fitViewPadding={20}
+        nodeAutoColorBy="id"
+        linkWidth={(link) => Math.sqrt(link.weight || 1)}
+        linkColor={() => linkColor}
+        nodeCanvasObject={(node, ctx, globalScale) => {
+          const fontSize = 12 / globalScale;
+          const radius = getNodeSize(node);
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
+
+          ctx.fillStyle =
+            node.isCommon && highlightCommonNodes ? "#FF5733" : baseColor;
+          ctx.fill();
+
+          if (node.isCommon && highlightCommonNodes) {
+            ctx.strokeStyle = "#FFFF00";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+
+          ctx.font = `${fontSize}px Sans-Serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = "white";
+          ctx.fillText(node.id, node.x, node.y);
+
+          const metrics =
+            filteredOriginalData && filteredComparisonData
+              ? comparisonMetrics
+              : isComparisonGraph
+              ? comparisonMetrics
+              : selectedMetric
+              ? [selectedMetric]
+              : [];
+
+          if (metrics.length > 0) {
+            ctx.fillStyle = "black";
+            let yOffset = radius + 5;
+
+            if (metrics.includes("Degree Centrality")) {
+              ctx.fillText(
+                `Deg: ${node.degree || 0}`,
+                node.x,
+                node.y + yOffset
+              );
+              yOffset += fontSize;
+            }
+            if (metrics.includes("Betweenness Centrality")) {
+              ctx.fillText(
+                `Btw: ${node.betweenness?.toFixed(2) || 0}`,
+                node.x,
+                node.y + yOffset
+              );
+              yOffset += fontSize;
+            }
+            if (metrics.includes("Closeness Centrality")) {
+              ctx.fillText(
+                `Cls: ${node.closeness?.toFixed(2) || 0}`,
+                node.x,
+                node.y + yOffset
+              );
+              yOffset += fontSize;
+            }
+            if (metrics.includes("Eigenvector Centrality")) {
+              ctx.fillText(
+                `Eig: ${node.eigenvector?.toFixed(4) || 0}`,
+                node.x,
+                node.y + yOffset
+              );
+              yOffset += fontSize;
+            }
+            if (metrics.includes("PageRank Centrality")) {
+              ctx.fillText(
+                `PR: ${node.pagerank?.toFixed(4) || 0}`,
+                node.x,
+                node.y + yOffset
+              );
+            }
+          }
+
+          ctx.restore();
+        }}
+      />
+    );
   };
 
   const handleHighlightCentralNodes = () => {
@@ -780,7 +1442,7 @@ const Home = () => {
                     <Col lg={6} md={6} className="mb-3">
                       <Form.Group>
                         <Form.Label className="research-label">
-                          Min Message Length:
+                          Min Message Length (Characters):
                         </Form.Label>
                         <Form.Control
                           type="number"
@@ -795,7 +1457,7 @@ const Home = () => {
                     <Col lg={6} md={6} className="mb-3">
                       <Form.Group>
                         <Form.Label className="research-label">
-                          Max Message Length:
+                          Max Message Length (Characters):
                         </Form.Label>
                         <Form.Control
                           type="number"
@@ -1015,11 +1677,12 @@ const Home = () => {
                     </div>
                   )}
                 </Card>
-                <Card className="metrics-card">
+                <Card className="metrics-card my-2">
                   <h4 className="fw-bold d-flex justify-content-between align-items-center">
                     Network Metrics
                     <Button
                       variant="link"
+                      className="metrics-toggle"
                       onClick={() => setShowNetworkStats(!showNetworkStats)}
                     >
                       {showNetworkStats ? (
@@ -1070,6 +1733,14 @@ const Home = () => {
 
               {/* Graph Display */}
               <Col lg={9} md={12} className="graph-area">
+                {networkData && (
+                  <NetworkCustomizationToolbar
+                    networkData={networkData}
+                    communities={communities}
+                    onApplyCustomization={handleNetworkCustomization}
+                    initialSettings={visualizationSettings}
+                  />
+                )}
                 {(showDensity || showDiameter) && (
                   <Card className="density-card">
                     {showDensity && (
@@ -1088,29 +1759,66 @@ const Home = () => {
                     {networkData && (
                       <GraphContainer>
                         <ForceGraph2D
-                          key={showDensity || showDiameter}
+                          key={
+                            showDensity || showDiameter || customizedNetworkData
+                              ? "customized"
+                              : "default"
+                          }
                           graphData={{
-                            nodes: filteredNodes,
-                            links: filteredLinks.map((link) => ({
-                              source:
-                                filteredNodes.find(
-                                  (node) =>
-                                    node.id === link.source.id ||
-                                    node.id === link.source
-                                ) || link.source,
-                              target:
-                                filteredNodes.find(
-                                  (node) =>
-                                    node.id === link.target.id ||
-                                    node.id === link.target
-                                ) || link.target,
-                            })),
+                            nodes: customizedNetworkData
+                              ? customizedNetworkData.nodes
+                              : filteredNodes,
+                            links: customizedNetworkData
+                              ? customizedNetworkData.links.map((link) => {
+                                  const sourceNode =
+                                    customizedNetworkData.nodes.find(
+                                      (node) =>
+                                        (typeof link.source === "object" &&
+                                          node.id === link.source.id) ||
+                                        node.id === link.source
+                                    );
+
+                                  const targetNode =
+                                    customizedNetworkData.nodes.find(
+                                      (node) =>
+                                        (typeof link.target === "object" &&
+                                          node.id === link.target.id) ||
+                                        node.id === link.target
+                                    );
+
+                                  return {
+                                    source: sourceNode || link.source,
+                                    target: targetNode || link.target,
+                                    weight: link.weight || 1,
+                                  };
+                                })
+                              : filteredLinks.map((link) => {
+                                  const sourceNode = filteredNodes.find(
+                                    (node) =>
+                                      (typeof link.source === "object" &&
+                                        node.id === link.source.id) ||
+                                      node.id === link.source
+                                  );
+
+                                  const targetNode = filteredNodes.find(
+                                    (node) =>
+                                      (typeof link.target === "object" &&
+                                        node.id === link.target.id) ||
+                                      node.id === link.target
+                                  );
+
+                                  return {
+                                    source: sourceNode || link.source,
+                                    target: targetNode || link.target,
+                                    weight: link.weight || 1,
+                                  };
+                                }),
                           }}
                           width={showMetrics ? 1200 : 1500}
                           height={500}
                           fitView
                           fitViewPadding={20}
-                          nodeAutoColorBy="id"
+                          nodeAutoColorBy={customizedNetworkData ? null : "id"}
                           linkWidth={(link) => Math.sqrt(link.weight || 1)}
                           linkColor={() => "gray"}
                           enableNodeDrag={true}
@@ -1142,8 +1850,10 @@ const Home = () => {
                           }}
                           nodeCanvasObject={(node, ctx, globalScale) => {
                             const fontSize = 12 / globalScale;
+
                             const radius =
-                              selectedMetric === "PageRank Centrality"
+                              node.size ||
+                              (selectedMetric === "PageRank Centrality"
                                 ? Math.max(10, node.pagerank * 500)
                                 : selectedMetric === "Eigenvector Centrality"
                                 ? Math.max(10, node.eigenvector * 60)
@@ -1153,7 +1863,7 @@ const Home = () => {
                                 ? Math.max(10, node.betweenness * 80)
                                 : selectedMetric === "Degree Centrality"
                                 ? Math.max(10, node.degree * 80)
-                                : 20;
+                                : 20);
 
                             ctx.save();
                             ctx.beginPath();
@@ -1166,6 +1876,7 @@ const Home = () => {
                               false
                             );
 
+
                             // Define isHighlighted first
                             const isHighlighted =
                               node.highlighted && highlightCentralNodes;
@@ -1173,7 +1884,8 @@ const Home = () => {
                             // Define the color based on highlighting and selected metric
                             const color = isHighlighted
                               ? "#ff9900" // bright orange for highlighted nodes
-                              : selectedMetric === "PageRank Centrality"
+                              : node.color ||
+                              (selectedMetric === "PageRank Centrality"
                               ? "orange"
                               : selectedMetric === "Eigenvector Centrality"
                               ? "purple"
@@ -1183,7 +1895,8 @@ const Home = () => {
                               ? "red"
                               : selectedMetric === "Degree Centrality"
                               ? "#231d81"
-                              : node.color || "blue";
+                              : node.color || "blue");
+
 
                             ctx.fillStyle = color;
                             ctx.fill();
@@ -1198,7 +1911,7 @@ const Home = () => {
                             ctx.font = `${fontSize}px Sans-Serif`;
                             ctx.textAlign = "center";
                             ctx.textBaseline = "middle";
-                            ctx.fillStyle = "black";
+                            ctx.fillStyle = "white";
                             ctx.fillText(node.id, node.x, node.y);
 
                             if (selectedMetric === "Degree Centrality") {
@@ -1250,6 +1963,313 @@ const Home = () => {
                   </div>
                 </Card>
               </Col>
+            </Row>
+          )}
+
+          <Row className="mt-4">
+            <Card className="comparison-card">
+              <h4 className="fw-bold">Comparison Section</h4>
+              <Row>
+                <Col md={6}>
+                  <Button
+                    className="action-btn mt-3 mb-3"
+                    onClick={() => setComparisonCount(comparisonCount + 1)}
+                  >
+                    {/* <Upload size={16} />  */}
+                    Add New Comparison
+                  </Button>
+                </Col>
+              </Row>
+              {[...Array(comparisonCount)].map((_, index) => (
+                <Card key={index} className="mb-3">
+                  <Card.Body>
+                    <Row className="align-items-center">
+                      <Col md={4}>
+                        <h5>Comparison File #{index + 1}</h5>
+                        {comparisonData[index]?.filename ? (
+                          <p>{comparisonData[index].name}</p>
+                        ) : (
+                          <p>No file selected</p>
+                        )}
+                      </Col>
+                      <Col md={8} className="text-end">
+                        <Button
+                          className="action-btn me-2"
+                          onClick={() =>
+                            document.getElementById(`compFile${index}`).click()
+                          }
+                        >
+                          <Upload size={16} /> Upload File
+                        </Button>
+                        <input
+                          type="file"
+                          id={`compFile${index}`}
+                          style={{ display: "none" }}
+                          accept=".txt"
+                          onChange={(e) => handleComparisonFileChange(e, index)}
+                        />
+                        {comparisonData[index]?.filename && (
+                          <Button
+                            className="action-btn"
+                            onClick={() => handleComparisonAnalysis(index)}
+                          >
+                            Analyze Network
+                          </Button>
+                        )}
+                      </Col>
+                    </Row>
+                  </Card.Body>
+                </Card>
+              ))}
+
+              <Row>
+                {comparisonNetworkData.map((data, index) => {
+                  if (data && data.nodes && data.links) {
+                    return (
+                      <Col md={12} key={index}>
+                        <Card className="mt-3 mb-3">
+                          <Card.Header
+                            as="h5"
+                            className="d-flex justify-content-between"
+                          >
+                            <span>
+                              Comparison #{index + 1}:{" "}
+                              {comparisonData[index]?.name || ""}
+                            </span>
+                            <Form.Check
+                              type="checkbox"
+                              label="Add to comparison view"
+                              checked={activeComparisonIndices.includes(index)}
+                              onChange={() => toggleComparisonActive(index)}
+                              className="mt-1"
+                            />
+                          </Card.Header>
+                          <Card.Body className="text-center">
+                            {renderComparisonGraph(index)}
+                          </Card.Body>
+                        </Card>
+                      </Col>
+                    );
+                  }
+                  return null;
+                })}
+              </Row>
+
+              {networkData && activeComparisonIndices.length > 0 && (
+                <Row className="mt-4">
+                  <h4 className="fw-bold">Network Comparison View</h4>
+                  <div className="comparison-toolbar mb-3">
+                    <div className="toolbar-section">
+                      <span className="toolbar-label">Filter:</span>
+                      <input
+                        type="text"
+                        className="toolbar-input"
+                        placeholder="Filter nodes..."
+                        value={comparisonFilter}
+                        onChange={(e) => setComparisonFilter(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="toolbar-section">
+                      <span className="toolbar-label">Min Weight:</span>
+                      <input
+                        type="number"
+                        className="toolbar-input"
+                        min="1"
+                        value={minComparisonWeight}
+                        onChange={(e) =>
+                          setMinComparisonWeight(parseInt(e.target.value) || 1)
+                        }
+                      />
+                    </div>
+
+                    <div className="toolbar-section metrics-toggles">
+                      <span className="toolbar-label">Metrics:</span>
+                      <div className="toolbar-buttons">
+                        {graphMetrics.slice(0, 5).map((metric) => (
+                          <button
+                            key={metric}
+                            className={`toolbar-button ${
+                              comparisonMetrics.includes(metric) ? "active" : ""
+                            }`}
+                            onClick={() => toggleComparisonMetric(metric)}
+                            title={metric}
+                          >
+                            {metric.split(" ")[0]}
+                          </button>
+                        ))}
+                        <button
+                          className={`toolbar-button ${
+                            highlightCommonNodes ? "active" : ""
+                          }`}
+                          onClick={() =>
+                            setHighlightCommonNodes(!highlightCommonNodes)
+                          }
+                          title="Highlight Common Nodes"
+                        >
+                          Common
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="toolbar-section">
+                      <button
+                        className="toolbar-action-btn"
+                        onClick={applyComparisonFilters}
+                      >
+                        Apply
+                      </button>
+                      <button
+                        className="toolbar-action-btn outline"
+                        onClick={resetComparisonFilters}
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+
+                  <Col
+                    md={activeComparisonIndices.length > 1 ? 12 : 6}
+                    className="mb-4"
+                  >
+                    <Card>
+                      <Card.Header as="h5">Original Network</Card.Header>
+                      <Card.Body className="text-center">
+                        <GraphContainer>
+                          {renderForceGraph(
+                            filteredOriginalData || {
+                              nodes: originalNetworkData
+                                ? [...originalNetworkData.nodes]
+                                : [...networkData.nodes],
+                              links: originalNetworkData
+                                ? [...originalNetworkData.links]
+                                : [...networkData.links],
+                            },
+                            activeComparisonIndices.length > 1 ? 1000 : 600,
+                            500,
+                            false
+                          )}
+                        </GraphContainer>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+
+                  {activeComparisonIndices.map((index) => (
+                    <Col
+                      md={activeComparisonIndices.length > 1 ? 6 : 6}
+                      key={`comparison-${index}`}
+                      className="mb-4"
+                    >
+                      <Card>
+                        <Card.Header as="h5">
+                          Comparison Network #{index + 1}
+                        </Card.Header>
+                        <Card.Body className="text-center">
+                          <GraphContainer>
+                            {renderForceGraph(
+                              filteredComparisonData &&
+                                filteredComparisonData[index]
+                                ? filteredComparisonData[index]
+                                : {
+                                    nodes: [
+                                      ...comparisonNetworkData[index].nodes,
+                                    ],
+                                    links: [
+                                      ...comparisonNetworkData[index].links,
+                                    ],
+                                  },
+                              activeComparisonIndices.length > 2 ? 600 : 600,
+                              500,
+                              true
+                            )}
+                          </GraphContainer>
+                        </Card.Body>
+                      </Card>
+                    </Col>
+                  ))}
+                </Row>
+              )}
+            </Card>
+          </Row>
+          {networkData && activeComparisonIndices.length > 0 && (
+            <Row className="mt-4 mb-4">
+              <Card>
+                <Card.Header>
+                  <h5 className="fw-bold">Comparison Statistics</h5>
+                </Card.Header>
+                <Card.Body>
+                  {activeComparisonIndices.map((index) => (
+                    <div key={`stats-${index}`} className="mb-4">
+                      <h6>
+                        Statistics for Comparison #{index + 1}:{" "}
+                        {comparisonData[index]?.name || ""}
+                      </h6>
+                      {(() => {
+                        const compData = comparisonNetworkData[index];
+                        const stats = calculateComparisonStats(
+                          networkData,
+                          compData
+                        );
+
+                        if (!stats)
+                          return (
+                            <p>Could not calculate comparison statistics.</p>
+                          );
+
+                        return (
+                          <Table responsive striped bordered hover>
+                            <thead>
+                              <tr>
+                                <th>Metric</th>
+                                <th>Original Network</th>
+                                <th>Comparison Network</th>
+                                <th>Difference</th>
+                                <th>Change %</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                <td>Node Count</td>
+                                <td>{stats.originalNodeCount}</td>
+                                <td>{stats.comparisonNodeCount}</td>
+                                <td>
+                                  {stats.nodeDifference > 0
+                                    ? `+${stats.nodeDifference}`
+                                    : stats.nodeDifference}
+                                </td>
+                                <td>{stats.nodeChangePercent}%</td>
+                              </tr>
+                              <tr>
+                                <td>Edge Count</td>
+                                <td>{stats.originalLinkCount}</td>
+                                <td>{stats.comparisonLinkCount}</td>
+                                <td>
+                                  {stats.linkDifference > 0
+                                    ? `+${stats.linkDifference}`
+                                    : stats.linkDifference}
+                                </td>
+                                <td>{stats.linkChangePercent}%</td>
+                              </tr>
+                              <tr>
+                                <td>Common Nodes</td>
+                                <td colSpan="2">{stats.commonNodesCount}</td>
+                                <td colSpan="2">
+                                  {(
+                                    (stats.commonNodesCount /
+                                      stats.originalNodeCount) *
+                                    100
+                                  ).toFixed(2)}
+                                  % of original network
+                                </td>
+                              </tr>
+                            </tbody>
+                          </Table>
+                        );
+                      })()}
+                    </div>
+                  ))}
+                </Card.Body>
+              </Card>
             </Row>
           )}
         </div>
