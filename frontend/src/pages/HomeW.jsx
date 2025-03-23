@@ -20,7 +20,7 @@ import {
 } from "react-bootstrap-icons";
 import { ForceGraph2D } from "react-force-graph";
 import "./Home.css";
-
+import { AlertBox, GraphContainer } from "./Form.style.js";
 import AnonymizationToggle from "../components/AnonymizationToggle.jsx";
 import WikipediaDataFetcher from "../components/WikipediaDataFetcher.jsx";
 
