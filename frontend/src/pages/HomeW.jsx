@@ -20,7 +20,6 @@ import {
 } from "react-bootstrap-icons";
 import { ForceGraph2D } from "react-force-graph";
 import "./Home.css";
-// Import custom styles
 import { AlertBox, GraphContainer } from "./Form.style.js";
 import AnonymizationToggle from "../components/AnonymizationToggle.jsx";
 import WikipediaDataFetcher from "../components/WikipediaDataFetcher.jsx";
@@ -77,7 +76,6 @@ const HomeW = () => {
   ];
   useEffect(() => {
     if (!uploadedFile && !wikiUrl) {
-      // בדיקה גם על wikiUrl
       setFile(null);
       setChartData(null);
       setFilter("");
@@ -163,7 +161,6 @@ const HomeW = () => {
       );
       if (wikiUrl) {
         
-        // Just clear the Wikipedia data
         setWikiUrl("");
         setNetworkData(null);
         setOriginalNetworkData(null);
@@ -198,28 +195,11 @@ const HomeW = () => {
 
 
   const handleNetworkAnalysis = () => {
-    // Reset any previous error messages
     setMessage("");
 
-    // if (wikiUrl) {
-    //   console.log("Applying filters on Wikipedia data");
-    //   // Make sure the Wikipedia data is properly formatted
-    //   if (
-    //     originalNetworkData &&
-    //     originalNetworkData.nodes &&
-    //     originalNetworkData.links
-    //   ) {
-    //     setNetworkData({ ...originalNetworkData });
-    //   }
-    // } else {
-    //   if (!uploadedFile) {
-    //     setMessage("No file selected for analysis.");
-    //     console.log("No file available for network analysis.");
-    //     return;
-    //   }
     if (wikiUrl) {
       console.log("Applying filters on Wikipedia data");
-      setMessage("Applying filters to Wikipedia data..."); // Add this line
+      setMessage("Applying filters to Wikipedia data..."); 
       
       if (
         originalNetworkData &&
@@ -227,9 +207,9 @@ const HomeW = () => {
         originalNetworkData.links
       ) {
         setNetworkData({ ...originalNetworkData });
-        setMessage("Filters applied to Wikipedia data successfully!"); // Add this line
+        setMessage("Filters applied to Wikipedia data successfully!");
       } else {
-        setMessage("No valid Wikipedia data available."); // Add this line
+        setMessage("No valid Wikipedia data available."); 
       }
     }
     else {
@@ -262,7 +242,6 @@ const HomeW = () => {
       url += `?${params.toString()}`;
       console.log("Request URL:", url);
 
-      // Show loading message
       setMessage("Loading network data...");
 
       fetch(url)
@@ -275,16 +254,16 @@ const HomeW = () => {
         .then((data) => {
           console.log("Data returned from server:", data);
           if (data.nodes && data.links) {
-            // Make sure nodes have unique IDs
+
             const processedData = {
               nodes: data.nodes.map((node) => ({
                 ...node,
-                id: String(node.id), // Ensure ID is a string
+                id: String(node.id), 
               })),
               links: data.links.map((link) => ({
                 ...link,
-                source: String(link.source), // Ensure source is a string
-                target: String(link.target), // Ensure target is a string
+                source: String(link.source), 
+                target: String(link.target), 
               })),
             };
 
@@ -292,7 +271,6 @@ const HomeW = () => {
             setOriginalNetworkData(processedData);
             setMessage("Network analysis completed successfully!");
 
-            // Ensure the graph is rendered and zoomed properly
             setTimeout(() => {
               if (forceGraphRef.current) {
                 forceGraphRef.current.zoomToFit(400);
@@ -356,7 +334,6 @@ const HomeW = () => {
       inDegreeMap[targetId] = (inDegreeMap[targetId] || 0) + 1;
       outDegreeMap[sourceId] = (outDegreeMap[sourceId] || 0) + 1;
 
-      // Check for reciprocal edges
       const hasReciprocal = links.some((l) => {
         const otherSource =
           typeof l.source === "object" ? l.source.id : l.source;
@@ -370,7 +347,6 @@ const HomeW = () => {
       }
     });
 
-    // Calculate reciprocity (fix possible double counting)
     const reciprocity =
       numEdges > 0 ? (reciprocalEdges / (2 * numEdges)).toFixed(2) : 0;
 
@@ -445,7 +421,7 @@ const HomeW = () => {
       });
     });
 
-    return maxDistance === Infinity ? 0 : maxDistance; // Prevents returning `Infinity`
+    return maxDistance === Infinity ? 0 : maxDistance; 
   };
 
   const handleDiameterMetric = () => {
@@ -476,7 +452,6 @@ const HomeW = () => {
       setNetworkData(originalNetworkData);
       setStrongConnectionsActive(false);
     } else {
-      // Check if betweenness property exists on nodes
       if (!networkData.nodes.some((node) => node.betweenness !== undefined)) {
         setMessage(
           "Betweenness centrality metrics not available for this graph. Try analyzing first."
@@ -572,7 +547,7 @@ const HomeW = () => {
                   console.log("Wikipedia Data received in HomeW:", data);
                   setNetworkData(data);
                   setOriginalNetworkData(data);
-                  setUploadedFile(""); // Clear WhatsApp file when loading Wikipedia data
+                  setUploadedFile(""); 
                 }}
                 setWikiUrl={setWikiUrl}
               />

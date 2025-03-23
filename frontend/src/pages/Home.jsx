@@ -20,11 +20,9 @@ import {
 } from "react-bootstrap-icons";
 import { ForceGraph2D } from "react-force-graph";
 import "./Home.css";
-// Import custom styles
 import { AlertBox, GraphContainer } from "./Form.style.js";
 import AnonymizationToggle from "../components/AnonymizationToggle.jsx";
 import NetworkCustomizationToolbar from "../components/NetworkCustomizationToolbar.jsx";
-// import WikipediaDataFetcher from "../components/WikipediaDataFetcher.jsx";
 
 const Home = () => {
   const [name, setName] = useState("");
@@ -75,13 +73,15 @@ const Home = () => {
   const [filteredOriginalData, setFilteredOriginalData] = useState(null);
   const [filteredComparisonData, setFilteredComparisonData] = useState({});
   const [communities, setCommunities] = useState([]);
-  const [customizedNetworkData, setCustomizedNetworkData] = useState(null);  const [highlightCentralNodes, setHighlightCentralNodes] = useState(false);
+  const [customizedNetworkData, setCustomizedNetworkData] = useState(null);
+  const [highlightCentralNodes, setHighlightCentralNodes] = useState(false);
   const [selectedNode, setSelectedNode] = useState(null);
   const [nodeToRemove, setNodeToRemove] = useState(null);
   const [showRemoveNodeModal, setShowRemoveNodeModal] = useState(false);
   const [activityFilterEnabled, setActivityFilterEnabled] = useState(false);
-  const [activityThreshold, setActivityThreshold] = useState(2); // Default: nodes with at least 2 connections
+  const [activityThreshold, setActivityThreshold] = useState(2); 
   const forceGraphRef = useRef(null);
+  const [networkWasRestored, setNetworkWasRestored] = useState(false);
 
   const [visualizationSettings, setVisualizationSettings] = useState({
     colorBy: "default",
@@ -228,6 +228,8 @@ const Home = () => {
       setMessage("No file selected for analysis.");
       return;
     }
+
+    setNetworkWasRestored(false);
 
     const params = buildNetworkFilterParams();
     const url = `http://localhost:8001/analyze/network/${uploadedFile}?${params.toString()}`;
@@ -409,6 +411,8 @@ const Home = () => {
     if (strongConnectionsActive) {
       setNetworkData(originalNetworkData);
       setStrongConnectionsActive(false);
+
+      setNetworkWasRestored(false);
     } else {
       const threshold = 0.2;
       const filteredNodes = networkData.nodes.filter(
@@ -432,6 +436,8 @@ const Home = () => {
     } else {
       setActiveComparisonIndices([...activeComparisonIndices, index]);
     }
+
+    setNetworkWasRestored(false);
   };
   const handleComparisonFileChange = (event, index) => {
     const selectedFile = event.target.files[0];
@@ -1060,8 +1066,9 @@ const Home = () => {
 
     setHighlightCentralNodes(!highlightCentralNodes);
 
+    setNetworkWasRestored(false);
+
     if (!highlightCentralNodes) {
-      // Calculate which centrality measure to use based on selected metric
       let centralityMeasure = "degree";
       if (selectedMetric === "Betweenness Centrality")
         centralityMeasure = "betweenness";
@@ -1072,12 +1079,10 @@ const Home = () => {
       else if (selectedMetric === "PageRank Centrality")
         centralityMeasure = "pagerank";
 
-      // Create a copy of the network data to modify
-      const updatedNodes = networkData.nodes.map((node) => {
-        // Get the centrality value for this node
-        const centralityValue = node[centralityMeasure] || 0;
+      setNetworkWasRestored(false);
 
-        // Sort nodes by centrality and find threshold for top 20%
+      const updatedNodes = networkData.nodes.map((node) => {
+        const centralityValue = node[centralityMeasure] || 0;
         const sortedNodes = [...networkData.nodes].sort(
           (a, b) => (b[centralityMeasure] || 0) - (a[centralityMeasure] || 0)
         );
@@ -1099,7 +1104,6 @@ const Home = () => {
         nodes: updatedNodes,
       });
     } else {
-      // Reset highlighting
       const resetNodes = networkData.nodes.map((node) => ({
         ...node,
         highlighted: false,
@@ -1113,8 +1117,10 @@ const Home = () => {
   };
 
   const handleNodeClick = (node) => {
-    setSelectedNode(node);
-    setShowRemoveNodeModal(true);
+    if (networkWasRestored) {
+      setSelectedNode(node);
+      setShowRemoveNodeModal(true);
+    }
   };
 
   const handleRemoveNode = () => {
@@ -1133,7 +1139,7 @@ const Home = () => {
     );
 
     if (!originalNetworkData) {
-      setOriginalNetworkData(networkData);
+      setOriginalNetworkData(JSON.parse(JSON.stringify(networkData)));
     }
 
     setNetworkData({
@@ -1145,33 +1151,40 @@ const Home = () => {
     setSelectedNode(null);
   };
 
+
   const handleRestoreNetwork = () => {
     if (originalNetworkData) {
-      setNetworkData(originalNetworkData);
+      if (networkWasRestored) {
+        setNetworkWasRestored(false);
+      } else {
+        setNetworkData(JSON.parse(JSON.stringify(originalNetworkData)));
+        setNetworkWasRestored(true);
+  
+        if (activityFilterEnabled) {
+          setActivityFilterEnabled(false);
+        }
+      }
     }
   };
 
   const handleActivityFilter = () => {
     if (!networkData) return;
 
-    // Toggle the activity filter state
     const newState = !activityFilterEnabled;
     setActivityFilterEnabled(newState);
 
     if (newState) {
-      // Save original data if not already saved
       if (!originalNetworkData) {
-        setOriginalNetworkData(networkData);
+        setOriginalNetworkData(JSON.parse(JSON.stringify(networkData)));
+        setNetworkWasRestored(false);
       }
 
-      // Count connections for each node (sum of in-degree and out-degree)
       const connectionCounts = {};
       networkData.nodes.forEach((node) => {
         connectionCounts[node.id] = 0;
       });
 
       networkData.links.forEach((link) => {
-        // Handle both string IDs and object references
         const sourceId =
           typeof link.source === "object" ? link.source.id : link.source;
         const targetId =
@@ -1181,12 +1194,10 @@ const Home = () => {
         connectionCounts[targetId] = (connectionCounts[targetId] || 0) + 1;
       });
 
-      // Filter nodes with connections >= threshold
       const activeNodes = networkData.nodes.filter(
         (node) => connectionCounts[node.id] >= activityThreshold
       );
 
-      // Filter links that connect only active nodes
       const activeLinks = networkData.links.filter((link) => {
         const sourceId =
           typeof link.source === "object" ? link.source.id : link.source;
@@ -1204,24 +1215,24 @@ const Home = () => {
         links: activeLinks,
       });
     } else {
-      // Restore original network
       if (originalNetworkData) {
-        setNetworkData(originalNetworkData);
+        setNetworkData(JSON.parse(JSON.stringify(originalNetworkData)));
+        setNetworkWasRestored(true);
       }
     }
   };
 
-  //  function to apply activity filter with specific threshold
   const applyActivityFilter = (threshold) => {
-    if (!originalNetworkData) return;
-
-    // Count connections for each node
+    if (!networkData) return;
+    if (!originalNetworkData && !activityFilterEnabled) {
+      setOriginalNetworkData(JSON.parse(JSON.stringify(networkData)));
+    }
     const connectionCounts = {};
-    originalNetworkData.nodes.forEach((node) => {
+    networkData.nodes.forEach((node) => {
       connectionCounts[node.id] = 0;
     });
 
-    originalNetworkData.links.forEach((link) => {
+    networkData.links.forEach((link) => {
       const sourceId =
         typeof link.source === "object" ? link.source.id : link.source;
       const targetId =
@@ -1231,13 +1242,11 @@ const Home = () => {
       connectionCounts[targetId] = (connectionCounts[targetId] || 0) + 1;
     });
 
-    // Filter nodes with connections >= threshold
-    const activeNodes = originalNetworkData.nodes.filter(
+    const activeNodes = networkData.nodes.filter(
       (node) => connectionCounts[node.id] >= threshold
     );
 
-    // Filter links that connect only active nodes
-    const activeLinks = originalNetworkData.links.filter((link) => {
+    const activeLinks = networkData.links.filter((link) => {
       const sourceId =
         typeof link.source === "object" ? link.source.id : link.source;
       const targetId =
@@ -1254,6 +1263,7 @@ const Home = () => {
       links: activeLinks,
     });
   };
+
   return (
     <Container fluid className="upload-section">
       {/* Research Upload */}
@@ -1582,7 +1592,6 @@ const Home = () => {
                     onChange={(e) => {
                       const newThreshold = parseInt(e.target.value, 10);
                       setActivityThreshold(newThreshold);
-                      // Only apply if we have data and filter is enabled
                       if (activityFilterEnabled && originalNetworkData) {
                         applyActivityFilter(newThreshold);
                       }
@@ -1658,9 +1667,10 @@ const Home = () => {
                         Highlight Central Nodes
                       </Button>
                       <Button
-                        className={`metrics-item ${false ? "active" : ""}`} // Always false to ensure it's not active by default
-                        onClick={handleRestoreNetwork}
-                        disabled={!originalNetworkData}
+                        className={`metrics-item ${
+                          networkWasRestored ? "active" : ""
+                        }`}
+                        onClick={handleRestoreNetwork}                     
                       >
                         Restore Original Network
                       </Button>
@@ -1876,38 +1886,33 @@ const Home = () => {
                               false
                             );
 
-
-                            // Define isHighlighted first
                             const isHighlighted =
                               node.highlighted && highlightCentralNodes;
 
-                            // Define the color based on highlighting and selected metric
                             const color = isHighlighted
-                              ? "#ff9900" // bright orange for highlighted nodes
+                              ? "#ff9900" 
                               : node.color ||
-                              (selectedMetric === "PageRank Centrality"
-                              ? "orange"
-                              : selectedMetric === "Eigenvector Centrality"
-                              ? "purple"
-                              : selectedMetric === "Closeness Centrality"
-                              ? "green"
-                              : selectedMetric === "Betweenness Centrality"
-                              ? "red"
-                              : selectedMetric === "Degree Centrality"
-                              ? "#231d81"
-                              : node.color || "blue");
-
+                                (selectedMetric === "PageRank Centrality"
+                                  ? "orange"
+                                  : selectedMetric === "Eigenvector Centrality"
+                                  ? "purple"
+                                  : selectedMetric === "Closeness Centrality"
+                                  ? "green"
+                                  : selectedMetric === "Betweenness Centrality"
+                                  ? "red"
+                                  : selectedMetric === "Degree Centrality"
+                                  ? "#231d81"
+                                  : node.color || "blue");
 
                             ctx.fillStyle = color;
                             ctx.fill();
 
                             if (isHighlighted) {
-                              ctx.strokeStyle = "#ffff00"; // yellow stroke
+                              ctx.strokeStyle = "#ffff00"; 
                               ctx.lineWidth = 3;
                               ctx.stroke();
                             }
 
-                            // Text rendering
                             ctx.font = `${fontSize}px Sans-Serif`;
                             ctx.textAlign = "center";
                             ctx.textBaseline = "middle";
@@ -1956,6 +1961,13 @@ const Home = () => {
                             }
 
                             ctx.restore();
+                          }}
+                          onNodeHover={(node) => {
+                            if (node && networkWasRestored) {
+                              document.body.style.cursor = "pointer";
+                            } else {
+                              document.body.style.cursor = "default";
+                            }
                           }}
                         />
                       </GraphContainer>

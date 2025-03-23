@@ -24,20 +24,16 @@ import logging
 
 import json
 
-# Load environment variables
 load_dotenv()
 
-# Configuration Constants
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
 UPLOAD_FOLDER = "./uploads/"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Initialize FastAPI
 app = FastAPI()
 
-# CORS Configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -46,10 +42,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# OAuth2 Configuration
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
-# Models for request/response data
 class UserCreate(BaseModel):
     name: str
     email: EmailStr
@@ -70,7 +64,6 @@ class OAuthUser(BaseModel):
     avatar: str
 
 
-# Utility Functions
 def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
     """
     Creates a JWT access token.
@@ -94,7 +87,6 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
-# Routes
 @app.get("/protected")
 async def protected_route(current_user: dict = Depends(get_current_user)):
     """
@@ -240,7 +232,6 @@ async def delete_user(user_id: str):
 
 
 
-# network analysis 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     try:
@@ -265,7 +256,7 @@ async def delete_file(filename: str):
 
 
 def anonymize_name(name, anonymized_map):
-    """ ממיר שם או מספר טלפון למזהה אנונימי ייחודי """
+   
     if name.startswith("\u202a+972") or name.startswith("+972"):
         name = f"Phone_{len(anonymized_map) + 1}"
     if name not in anonymized_map:
@@ -278,7 +269,7 @@ def parse_datetime(date: str, time: str):
     """Parses date & time from the request query and ensures HH:MM:SS format."""
     if not date:
         return None
-    if time and len(time) == 5:  # If time is in HH:MM format, add ":00"
+    if time and len(time) == 5:  
         time += ":00"
     try:
         return datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M:%S")
@@ -365,7 +356,7 @@ async def analyze_network(
 
         for line in selected_lines:
             try:
-                if "הושמטה" in line or "הושמט" in line:
+                if "omitted" in line or "omitted" in line:
                     continue
                 
                 if line.startswith("[") and "]" in line and ": " in line:
@@ -780,7 +771,6 @@ async def analyze_communities(
 
 
 
-# save reaserch to mongo db
 @app.post("/save-form")
 async def save_form(data: dict):
     
@@ -788,10 +778,8 @@ async def save_form(data: dict):
     Save form data into the Research_user collection in MongoDB.
     """
     try:
-        # הגדרת הקולקציה מתוך מסד הנתונים
         research_collection = db["Research_user"]
         
-        # מבנה הנתונים שיוכנס למסד
         form_data = {
             "name": data.get("name"),
             "description": data.get("description"),
@@ -801,232 +789,11 @@ async def save_form(data: dict):
             "created_at": datetime.utcnow(),
         }
         
-        # שמירת הנתונים למסד
         result = await research_collection.insert_one(form_data)
         
-        # החזרת תשובה למשתמש
         return {"message": "Form saved successfully", "id": str(result.inserted_id)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error saving form: {str(e)}")
-
-
-    # wikipadia
-
-# # Configure logging
-# logging.basicConfig(level=logging.INFO)
-# logger = logging.getLogger(__name__)
-
-# @app.post("/fetch-wikipedia-data")
-# async def fetch_wikipedia_data(request: Request):
-#     data = await request.json()
-#     logger.info(f" JSON Received: {data}")
-
-#     url = data.get("url")
-#     if not url:
-#         raise HTTPException(status_code=400, detail="Missing Wikipedia URL")
-
-#     try:
-#         # שליפת דף ויקיפדיה
-#         response = requests.get(url, headers={"User-Agent": "NetXplore-Bot/1.0"})
-#         response.raise_for_status()
-#         logger.info(" Wikipedia page fetched successfully!")
-#         page_content = response.text
-#     except requests.RequestException as e:
-#         logger.error(f" Error fetching Wikipedia page: {e}")
-#         raise HTTPException(status_code=500, detail=f"Error fetching Wikipedia page: {str(e)}")
-
-#     # ניתוח ה-HTML באמצעות BeautifulSoup
-#     soup = BeautifulSoup(page_content, "html.parser")
-
-#     # זיהוי שפת הויקיפדיה
-#     lang = "he"  # ברירת מחדל
-#     if "en.wikipedia.org" in url:
-#         lang = "en"
-
-#     # איתור ונתוח חלקי הדיון
-#     participants = set()
-#     discussions = []
-#     messages = []
-#     sections = []
-
-#     # זיהוי כותרות נושאי דיון
-#     section_headers = soup.find_all(["h2", "h3", "h4"])
-    
-#     for header in section_headers:
-#         # לוקח רק כותרות שיש להן תוכן אחריהן
-#         if header.find_next_sibling():
-#             section_title = header.get_text(strip=True).replace("[עריכה]", "").replace("[edit]", "").strip()
-#             if section_title and not section_title.startswith("תוכן עניינים") and not section_title.startswith("Contents"):
-#                 sections.append((section_title, header))
-    
-#     # עבור כל נושא דיון
-#     for idx, (section_title, header) in enumerate(sections):
-#         current_section = {"title": section_title, "messages": []}
-        
-#         # מוצא את כל תגובות המשתמשים
-#         # נמצא את גבול הסקציה (עד הכותרת הבאה או סוף הדף)
-#         next_header = sections[idx + 1][1] if idx + 1 < len(sections) else None
-        
-#         # נאסוף את כל התוכן בין הכותרות
-#         current_element = header.next_sibling
-#         section_content = []
-        
-#         while current_element and current_element != next_header:
-#             if current_element.name in ["p", "div", "ul", "li"]:
-#                 section_content.append(current_element)
-#             current_element = current_element.next_sibling
-            
-#         # מצא משתמשים וציטוטים בסקציה זו
-#         for element in section_content:
-#             # חיפוש קישורי משתמשים
-#             user_links = element.find_all("a", href=re.compile(r"^/wiki/(User:|משתמש:)"))
-            
-#             if user_links:
-#                 for user_link in user_links:
-#                     username = user_link.get_text(strip=True)
-#                     if username:
-#                         participants.add(username)
-#                         parent_element = user_link.find_parent(["p", "div", "li"])
-#                         if parent_element:
-#                             message_text = parent_element.get_text(strip=True)
-#                             if message_text and len(message_text) > 10:  # מסנן הודעות קצרות מדי
-#                                 messages.append((username, message_text))
-#                                 current_section["messages"].append({
-#                                     "user": username, 
-#                                     "text": message_text
-#                                 })
-        
-#         if current_section["messages"]:
-#             discussions.append(current_section)
-
-#     # בניית גרף הדיון
-#     G = nx.DiGraph()
-    
-#     # הוספת צמתים (משתמשים)
-#     for user in participants:
-#         G.add_node(user, group=1)
-    
-#     # יצירת קשרים בין משתמשים לפי סדר התגובות בכל נושא
-#     for discussion in discussions:
-#         prev_user = None
-#         discussion_users = set()
-        
-#         for msg in discussion["messages"]:
-#             current_user = msg["user"]
-#             discussion_users.add(current_user)
-            
-#             # יוצר קשר בין משתמשים עוקבים באותו דיון
-#             if prev_user and prev_user != current_user:
-#                 # בדוק אם כבר קיים קשר ואם כן הגדל את המשקל
-#                 if G.has_edge(prev_user, current_user):
-#                     G[prev_user][current_user]["weight"] += 1
-#                 else:
-#                     G.add_edge(prev_user, current_user, weight=1)
-            
-#             prev_user = current_user
-        
-#         # מחבר כל המשתתפים בדיון לפותח הדיון (אם יש למעלה ממשתמש אחד)
-#         if len(discussion_users) > 1 and discussion["messages"]:
-#             first_user = discussion["messages"][0]["user"]
-#             for user in discussion_users:
-#                 if user != first_user:
-#                     if not G.has_edge(first_user, user):
-#                         G.add_edge(first_user, user, weight=1)
-    
-#     # המרת הגרף לפורמט JSON
-#     nodes_list = [{"id": node, "group": data["group"]} for node, data in G.nodes(data=True)]
-#     links_list = [{"source": source, "target": target, "weight": data["weight"]} 
-#                   for source, target, data in G.edges(data=True)]
-    
-#     # ארגון הודעות לפי סדר כרונולוגי
-#     formatted_messages = [(user, text) for user, text in messages]
-    
-#     return {
-#         "nodes": nodes_list, 
-#         "links": links_list, 
-#         "messages": formatted_messages
-#     }
-
-
-# # גרסאה נוספתתתת
-
-# logging.basicConfig(level=logging.INFO)
-# logger = logging.getLogger(__name__)
-
-# @app.post("/fetch-wikipedia-data")
-# async def fetch_wikipedia_data(request: Request):
-#     data = await request.json()
-#     logger.info(f"JSON Received: {data}")
-
-#     url = data.get("url")
-#     if not url:
-#         raise HTTPException(status_code=400, detail="Missing Wikipedia URL")
-
-#     try:
-#         response = requests.get(url, headers={"User-Agent": "NetXplore-Bot/1.0"})
-#         response.raise_for_status()
-#         logger.info("Wikipedia page fetched successfully!")
-#         page_content = response.text
-#     except requests.RequestException as e:
-#         logger.error(f"Error fetching Wikipedia page: {e}")
-#         raise HTTPException(status_code=500, detail=f"Error fetching Wikipedia page: {str(e)}")
-
-#     soup = BeautifulSoup(page_content, "html.parser")
-#     logger.info(f"Fetched Wikipedia HTML: {soup.prettify()[:5000]}")  # מדפיס 5000 תווים ראשונים לבדיקה
-
-#     # מציאת החלקים של הדיון
-#     discussion_blocks = soup.find_all(["h2", "h3", "h4", "p", "li", "div"])
-
-#     messages = []
-#     participants = set()
-#     discussions = []
-#     current_section = None
-#     user_regex = re.compile(r"^\[\[משתמש:([^|\]]+)")
-
-#     for block in discussion_blocks:
-#         text = block.get_text(strip=True)
-#         user_match = user_regex.search(text)
-
-#         if user_match:
-#             username = user_match.group(1)
-#             participants.add(username)
-
-#             # זיהוי רמת הזחה לפי מספר נקודותיים בהתחלה (שיטה של ויקיפדיה)
-#             indentation_level = len(re.match(r"^[:]*", text).group(0))
-#             messages.append({"user": username, "text": text, "level": indentation_level})
-
-#             if current_section:
-#                 current_section["messages"].append({"user": username, "text": text})
-#             else:
-#                 current_section = {"title": "דיון כללי", "messages": [{"user": username, "text": text}]}
-#                 discussions.append(current_section)
-
-#     # בניית גרף דיון בין משתמשים
-#     G = nx.DiGraph()
-
-#     for user in participants:
-#         G.add_node(user, group=1)
-
-#     prev_user = None
-#     for message in messages:
-#         current_user = message["user"]
-
-#         if prev_user and prev_user != current_user:
-#             if G.has_edge(prev_user, current_user):
-#                 G[prev_user][current_user]["weight"] += 1
-#             else:
-#                 G.add_edge(prev_user, current_user, weight=1)
-
-#         prev_user = current_user
-
-#     nodes_list = [{"id": node, "group": data["group"]} for node, data in G.nodes(data=True)]
-#     links_list = [{"source": source, "target": target, "weight": data["weight"]} for source, target, data in G.edges(data=True)]
-
-#     return {
-#         "nodes": nodes_list,
-#         "links": links_list,
-#         "messages": messages
-#     }
 
 
 logging.basicConfig(level=logging.INFO)
@@ -1041,7 +808,6 @@ async def fetch_wikipedia_data(request: Request):
     if not url:
         raise HTTPException(status_code=400, detail="Missing Wikipedia URL")
 
-    # ניסיון לשלוף את הדף בעזרת requests
     try:
         response = requests.get(url, headers={"User-Agent": "NetXplore-Bot/1.0"})
         response.raise_for_status()
@@ -1051,10 +817,8 @@ async def fetch_wikipedia_data(request: Request):
         logger.error(f"Error fetching Wikipedia page with requests: {e}")
         raise HTTPException(status_code=500, detail=f"Error fetching Wikipedia page: {str(e)}")
 
-    # ניתוח ה-HTML
     soup = BeautifulSoup(page_content, "html.parser")
 
-    # חיפוש אלמנט המכיל את הדיון
     discussion_container = soup.find("div", class_="mw-parser-output")
 
     if not discussion_container:
@@ -1079,7 +843,6 @@ async def fetch_wikipedia_data(request: Request):
 
     logger.info(f"Found discussion container with {len(discussion_container.find_all())} elements")
 
-    # מציאת כל הבלוקים של התגובות
     discussion_blocks = discussion_container.find_all(["p", "ul", "li", "div"])
 
     messages = []
@@ -1088,21 +851,17 @@ async def fetch_wikipedia_data(request: Request):
     for block in discussion_blocks:
         text = block.get_text(strip=True)
         if len(text) < 10:
-            continue  # מתעלמים משורות קצרות
-
-        # 🔹 חיפוש משתמשים בתוך קישורים ותגיות מודגשות (bold)
+            continue  
         username = None
 
-        # חיפוש בקישורים (למשתמשים בויקיפדיה)
         user_links = block.find_all("a", href=True)
         for link in user_links:
             href = link["href"]
             if "/wiki/משתמש:" in href or "/wiki/User:" in href:
                 username = link.get_text(strip=True)
                 participants.add(username)
-                break  # משתמש אחד לכל הודעה
+                break 
 
-        # חיפוש שם משתמש ב-bold (ייתכן שהוא לא מקושר)
         if not username:
             bold_text = block.find("b") or block.find("strong")
             if bold_text:
@@ -1115,7 +874,6 @@ async def fetch_wikipedia_data(request: Request):
 
     logger.info(f"Extracted {len(messages)} messages from discussion.")
 
-    # בניית גרף קשרים בין המשתמשים
     G = nx.DiGraph()
 
     for user in participants:

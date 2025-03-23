@@ -2,7 +2,7 @@ import React from "react";
 import { Container, Row, Col, Card } from "react-bootstrap";
 import { Whatsapp, Globe } from "react-bootstrap-icons";
 import { useNavigate } from "react-router-dom";
-import "./ChoosePlatform.css"; // קובץ CSS להתאמות עיצוב נוספות
+import "./ChoosePlatform.css";
 
 const ChoosePlatform = () => {
   const navigate = useNavigate();
