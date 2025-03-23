@@ -688,7 +688,7 @@ const Home = () => {
         );
         const ratio = maxDegree > 0 ? (node.degree || 0) / maxDegree : 0;
         nodeColor = interpolateColor(
-          "#FFFFFF",
+          "#ffefca",
           settings.customColors.defaultNodeColor,
           ratio
         );
@@ -698,13 +698,13 @@ const Home = () => {
         );
         const ratio =
           maxBetweenness > 0 ? (node.betweenness || 0) / maxBetweenness : 0;
-        nodeColor = interpolateColor("#FFFFFF", "#FF5733", ratio);
+        nodeColor = interpolateColor("#ffefca", "#FF5733", ratio);
       } else if (settings.colorBy === "pagerank") {
         const maxPageRank = Math.max(
           ...customizedNodes.map((n) => n.pagerank || 0)
         );
         const ratio = maxPageRank > 0 ? (node.pagerank || 0) / maxPageRank : 0;
-        nodeColor = interpolateColor("#FFFFFF", "#3366CC", ratio);
+        nodeColor = interpolateColor("#ffefca", "#3366CC", ratio);
       } else if (settings.colorBy === "custom") {
         if (settings.highlightUsers.includes(node.id)) {
           nodeColor = settings.customColors.highlightNodeColor;
