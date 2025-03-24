@@ -79,9 +79,13 @@ const Home = () => {
   const [nodeToRemove, setNodeToRemove] = useState(null);
   const [showRemoveNodeModal, setShowRemoveNodeModal] = useState(false);
   const [activityFilterEnabled, setActivityFilterEnabled] = useState(false);
-  const [activityThreshold, setActivityThreshold] = useState(2); 
+  const [activityThreshold, setActivityThreshold] = useState(2);
   const forceGraphRef = useRef(null);
   const [networkWasRestored, setNetworkWasRestored] = useState(false);
+  const [showOnlyIntraCommunityLinks, setShowOnlyIntraCommunityLinks] =
+    useState(false);
+    const [communityMap, setCommunityMap] = useState({});
+
 
   const [visualizationSettings, setVisualizationSettings] = useState({
     colorBy: "default",
@@ -218,6 +222,8 @@ const Home = () => {
       setMessage("An error occurred during the delete operation.");
     }
   };
+
+
 
   const formatTime = (time) => {
     return time && time.length === 5 ? `${time}:00` : time;
@@ -586,47 +592,114 @@ const Home = () => {
       commonNodesCount,
     };
   };
+  // const fetchCommunityData = () => {
+  //   if (!uploadedFile) {
+  //     setMessage("No file selected for community detection.");
+  //     return;
+  //   }
+
+  //   const params = buildNetworkFilterParams();
+  //   params.append("algorithm", "louvain");
+
+  //   const url = `http://localhost:8001/analyze/communities/${uploadedFile}?${params.toString()}`;
+
+  //   console.log("Community detection URL:", url);
+  //   fetch(url)
+  //     .then((response) => response.json())
+  //     .then((data) => {
+  //       console.log("Community data returned from server:", data);
+  //       if (data.communities && data.nodes) {
+  //         setCommunities(data.communities);
+
+  //         if (networkData && networkData.nodes) {
+  //           const updatedNodes = networkData.nodes.map((node) => {
+  //             const matchingNode = data.nodes.find((n) => n.id === node.id);
+  //             if (matchingNode && matchingNode.community !== undefined) {
+  //               return { ...node, community: matchingNode.community };
+  //             }
+  //             return node;
+  //           });
+
+  //           setNetworkData({
+  //             nodes: updatedNodes,
+  //             links: networkData.links,
+  //           });
+  //           setOriginalNetworkData({
+  //             nodes: updatedNodes,
+  //             links: networkData.links,
+  //           });
+  //         }
+
+  //         setMessage(
+  //           `Detected ${data.communities.length} communities in the network.`
+  //         );
+  //       } else {
+  //         setMessage("No community data returned from server.");
+  //       }
+  //     })
+  //     .catch((err) => {
+  //       setMessage("An error occurred during community detection.");
+  //       console.error("Error during community detection:", err);
+  //     });
+  // };
   const fetchCommunityData = () => {
     if (!uploadedFile) {
       setMessage("No file selected for community detection.");
       return;
     }
-
+  
     const params = buildNetworkFilterParams();
     params.append("algorithm", "louvain");
-
+  
     const url = `http://localhost:8001/analyze/communities/${uploadedFile}?${params.toString()}`;
-
+  
     console.log("Community detection URL:", url);
     fetch(url)
       .then((response) => response.json())
       .then((data) => {
         console.log("Community data returned from server:", data);
+  
         if (data.communities && data.nodes) {
           setCommunities(data.communities);
-
+  
+          const newCommunityMap = {};
+  
+          // יצירת מיפוי של כל node ל-community
+          data.nodes.forEach((node) => {
+            if (node.community !== undefined) {
+              newCommunityMap[node.id.toString().trim()] = node.community;
+            }
+          });
+  
+          console.log("CommunityMap:", newCommunityMap);
+          setCommunityMap(newCommunityMap);
+  
+          // עדכון הצמתים הקיימים לפי המיפוי
           if (networkData && networkData.nodes) {
             const updatedNodes = networkData.nodes.map((node) => {
-              const matchingNode = data.nodes.find((n) => n.id === node.id);
-              if (matchingNode && matchingNode.community !== undefined) {
-                return { ...node, community: matchingNode.community };
+              const normalizedId = node.id.toString().trim();
+              const community = newCommunityMap[normalizedId];
+  
+              if (community !== undefined) {
+                console.log(`Assigning node ${node.id} to community ${community}`);
+                return { ...node, community };
               }
+  
               return node;
             });
-
+  
             setNetworkData({
               nodes: updatedNodes,
               links: networkData.links,
             });
+  
             setOriginalNetworkData({
               nodes: updatedNodes,
               links: networkData.links,
             });
+  
+            setMessage(`Detected ${data.communities.length} communities in the network.`);
           }
-
-          setMessage(
-            `Detected ${data.communities.length} communities in the network.`
-          );
         } else {
           setMessage("No community data returned from server.");
         }
@@ -636,7 +709,7 @@ const Home = () => {
         console.error("Error during community detection:", err);
       });
   };
-
+  
   const handleNetworkCustomization = (settings) => {
     setVisualizationSettings(settings);
     console.log("Applying visualization settings:", settings);
@@ -1151,7 +1224,6 @@ const Home = () => {
     setSelectedNode(null);
   };
 
-
   const handleRestoreNetwork = () => {
     if (originalNetworkData) {
       if (networkWasRestored) {
@@ -1159,7 +1231,7 @@ const Home = () => {
       } else {
         setNetworkData(JSON.parse(JSON.stringify(originalNetworkData)));
         setNetworkWasRestored(true);
-  
+
         if (activityFilterEnabled) {
           setActivityFilterEnabled(false);
         }
@@ -1263,6 +1335,113 @@ const Home = () => {
       links: activeLinks,
     });
   };
+
+
+  const handleToggleCommunitiesFilter = () => {
+    if (!networkData || !originalNetworkData) return;
+  
+    const newState = !showOnlyIntraCommunityLinks;
+    setShowOnlyIntraCommunityLinks(newState);
+  
+    if (newState) {
+      const filteredLinks = networkData.links.filter((link) => {
+        const sourceId = typeof link.source === "object" ? link.source.id : link.source;
+        const targetId = typeof link.target === "object" ? link.target.id : link.target;
+  
+        const sourceCommunity = communityMap[sourceId?.toString().trim()];
+        const targetCommunity = communityMap[targetId?.toString().trim()];
+  
+        if (sourceCommunity === undefined || targetCommunity === undefined) {
+          return false;
+        }
+  
+        return sourceCommunity === targetCommunity;
+      });
+  
+      const connectedNodeIds = new Set();
+      filteredLinks.forEach((link) => {
+        const sourceId = typeof link.source === "object" ? link.source.id : link.source;
+        const targetId = typeof link.target === "object" ? link.target.id : link.target;
+        connectedNodeIds.add(sourceId);
+        connectedNodeIds.add(targetId);
+      });
+  
+      const communities = [...new Set(Object.values(communityMap))];
+      const radius = 500;
+      const angleStep = (2 * Math.PI) / communities.length;
+  
+      const communityCenters = {};
+      communities.forEach((community, index) => {
+        const angle = index * angleStep;
+        communityCenters[community] = {
+          x: radius * Math.cos(angle),
+          y: radius * Math.sin(angle),
+        };
+      });
+  
+      const communityColors = [
+        "#313659", "#5f6289", "#324b4a", "#158582", "#9092bc", "#c4c6f1",
+        "#ff9800", "#4caf50", "#2196f3", "#e91e63", "#9c27b0", "#795548"
+      ];
+  
+      const updatedNodes = networkData.nodes
+        .filter((node) => connectedNodeIds.has(node.id))
+        .map((node) => {
+          const community = communityMap[node.id?.toString().trim()];
+          const center = communityCenters[community];
+          const jitter = 30;
+  
+          return {
+            ...node,
+            community, // עדכון הקהילה במקרה והיא לא הייתה קיימת
+            originalX: node.x,
+            originalY: node.y,
+            x: center.x + (Math.random() * jitter * 2 - jitter),
+            y: center.y + (Math.random() * jitter * 2 - jitter),
+            color: communityColors[Number(community) % communityColors.length],
+          };
+        });
+  
+      console.log("Updated nodes:", updatedNodes);
+      console.log("Filtered links:", filteredLinks);
+  
+      setNetworkData({
+        nodes: updatedNodes,
+        links: filteredLinks,
+      });
+  
+      setMessage(
+        `Showing only intra-community links and hiding isolated nodes. Removed ${networkData.links.length - filteredLinks.length} cross-community links.`
+      );
+    } else {
+      const restoredNodes = originalNetworkData.nodes.map((node) => {
+        const currentNode = networkData.nodes.find((n) => n.id === node.id);
+        if (currentNode && currentNode.originalX !== undefined && currentNode.originalY !== undefined) {
+          return {
+            ...node,
+            x: currentNode.originalX,
+            y: currentNode.originalY,
+          };
+        }
+        return node;
+      });
+  
+      setNetworkData({
+        nodes: restoredNodes,
+        links: originalNetworkData.links,
+      });
+  
+      setMessage("Showing all links in the network.");
+    }
+  
+    if (forceGraphRef.current) {
+      setTimeout(() => {
+        forceGraphRef.current.d3ReheatSimulation();
+        forceGraphRef.current.zoomToFit(400);
+      }, 100);
+    }
+  };
+  
 
   return (
     <Container fluid className="upload-section">
@@ -1670,7 +1849,7 @@ const Home = () => {
                         className={`metrics-item ${
                           networkWasRestored ? "active" : ""
                         }`}
-                        onClick={handleRestoreNetwork}                     
+                        onClick={handleRestoreNetwork}
                       >
                         Restore Original Network
                       </Button>
@@ -1683,6 +1862,17 @@ const Home = () => {
                         {activityFilterEnabled
                           ? "Show All Users"
                           : "Hide Inactive Users"}
+                      </Button>
+
+                      <Button
+                        className={`metrics-item ${
+                          showOnlyIntraCommunityLinks ? "active" : ""
+                        }`}
+                        onClick={handleToggleCommunitiesFilter}
+                      >
+                        {showOnlyIntraCommunityLinks
+                          ? "Show All Links"
+                          : "Hide Cross-Community Links"}
                       </Button>
                     </div>
                   )}
@@ -1890,7 +2080,7 @@ const Home = () => {
                               node.highlighted && highlightCentralNodes;
 
                             const color = isHighlighted
-                              ? "#ff9900" 
+                              ? "#ff9900"
                               : node.color ||
                                 (selectedMetric === "PageRank Centrality"
                                   ? "orange"
@@ -1908,7 +2098,7 @@ const Home = () => {
                             ctx.fill();
 
                             if (isHighlighted) {
-                              ctx.strokeStyle = "#ffff00"; 
+                              ctx.strokeStyle = "#ffff00";
                               ctx.lineWidth = 3;
                               ctx.stroke();
                             }
