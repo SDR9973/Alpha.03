@@ -82,6 +82,7 @@ const Home = () => {
   const [activityThreshold, setActivityThreshold] = useState(2);
   const forceGraphRef = useRef(null);
   const [networkWasRestored, setNetworkWasRestored] = useState(false);
+  const [shouldFetchCommunities, setShouldFetchCommunities] = useState(false);
 
   const [visualizationSettings, setVisualizationSettings] = useState({
     colorBy: "default",
@@ -132,8 +133,8 @@ const Home = () => {
     const updatedSettings = {
       ...visualizationSettings,
       communityColors: communityColors,
-      colorBy: "community", 
-      highlightCommunities: [], 
+      colorBy: "community",
+      highlightCommunities: [],
     };
 
     setVisualizationSettings(updatedSettings);
@@ -173,8 +174,17 @@ const Home = () => {
     }
     if (networkData) {
       calculateNetworkStats();
+      // fetchCommunityData();
     }
-  }, [uploadedFile, showMetrics, networkData]);
+    if (
+      shouldFetchCommunities &&
+      networkData &&
+      networkData.nodes?.length > 0
+    ) {
+      fetchCommunityData();
+      setShouldFetchCommunities(false);
+    }
+  }, [shouldFetchCommunities, uploadedFile, showMetrics, networkData]);
 
   const handleFileChange = (event) => {
     const selectedFile = event.target.files[0];
@@ -273,7 +283,7 @@ const Home = () => {
         if (data.nodes && data.links) {
           setNetworkData(data);
           setOriginalNetworkData(data);
-          fetchCommunityData();
+          setShouldFetchCommunities(true);
         } else {
           setMessage("No data returned from server.");
         }
@@ -635,26 +645,43 @@ const Home = () => {
         console.log("Community data returned from server:", data);
         if (data.communities && data.nodes) {
           setCommunities(data.communities);
-          loadCommunityColors(data.communities); 
 
-          if (networkData && networkData.nodes) {
-            const updatedNodes = networkData.nodes.map((node) => {
-              const matchingNode = data.nodes.find((n) => n.id === node.id);
-              if (matchingNode && matchingNode.community !== undefined) {
-                return { ...node, community: matchingNode.community };
-              }
-              return node;
-            });
+          // Update nodes with community info
+          const updatedNodes = networkData.nodes.map((node) => {
+            const matchingNode = data.nodes.find((n) => n.id === node.id);
+            if (matchingNode && matchingNode.community !== undefined) {
+              return { ...node, community: matchingNode.community };
+            }
+            return node;
+          });
 
-            setNetworkData({
-              nodes: updatedNodes,
-              links: networkData.links,
-            });
-            setOriginalNetworkData({
-              nodes: updatedNodes,
-              links: networkData.links,
-            });
-          }
+          const updatedNetwork = {
+            nodes: updatedNodes,
+            links: networkData.links,
+          };
+
+          setNetworkData(updatedNetwork);
+          setOriginalNetworkData(updatedNetwork);
+
+          // Automatically apply community colors
+          const communityColors = {};
+          const colorArray = visualizationSettings.customColors.communityColors;
+
+          data.communities.forEach((community, index) => {
+            const communityId = community.id;
+            communityColors[communityId] =
+              colorArray[index % colorArray.length];
+          });
+
+          const updatedSettings = {
+            ...visualizationSettings,
+            communityColors: communityColors,
+            colorBy: "community",
+            highlightCommunities: [],
+          };
+
+          setVisualizationSettings(updatedSettings);
+          handleNetworkCustomization(updatedSettings);
 
           setMessage(
             `Detected ${data.communities.length} communities in the network.`
@@ -668,20 +695,20 @@ const Home = () => {
         console.error("Error during community detection:", err);
       });
   };
+
   const handleNetworkCustomization = (settings) => {
     setVisualizationSettings(settings);
     console.log("Applying visualization settings:", settings);
-  
+
     if (!networkData) return;
-  
+
     const customizedNodes = JSON.parse(JSON.stringify(networkData.nodes));
     const customizedLinks = JSON.parse(JSON.stringify(networkData.links));
-  
+
     for (const node of customizedNodes) {
       let nodeSize = settings.nodeSizes.min;
       let nodeColor = settings.customColors.defaultNodeColor;
-  
-      // Size logic
+
       const sizeByValue = (metric) => {
         const maxVal = Math.max(...customizedNodes.map((n) => n[metric] || 0));
         const ratio = maxVal > 0 ? (node[metric] || 0) / maxVal : 0;
@@ -690,13 +717,14 @@ const Home = () => {
           ratio * (settings.nodeSizes.max - settings.nodeSizes.min)
         );
       };
-  
+
       if (settings.sizeBy === "messages") nodeSize = sizeByValue("messages");
       else if (settings.sizeBy === "degree") nodeSize = sizeByValue("degree");
-      else if (settings.sizeBy === "betweenness") nodeSize = sizeByValue("betweenness");
-      else if (settings.sizeBy === "pagerank") nodeSize = sizeByValue("pagerank");
-  
-      // Color logic (prioritized properly)
+      else if (settings.sizeBy === "betweenness")
+        nodeSize = sizeByValue("betweenness");
+      else if (settings.sizeBy === "pagerank")
+        nodeSize = sizeByValue("pagerank");
+
       if (settings.colorBy === "community" && node.community !== undefined) {
         const communityId = parseInt(node.community, 10);
         nodeColor =
@@ -705,11 +733,19 @@ const Home = () => {
             communityId % settings.customColors.communityColors.length
           ];
       } else if (settings.colorBy === "degree") {
-        const maxDegree = Math.max(...customizedNodes.map((n) => n.degree || 0));
+        const maxDegree = Math.max(
+          ...customizedNodes.map((n) => n.degree || 0)
+        );
         const ratio = maxDegree > 0 ? (node.degree || 0) / maxDegree : 0;
-        nodeColor = interpolateColor("#ffefca", settings.customColors.defaultNodeColor, ratio);
+        nodeColor = interpolateColor(
+          "#ffefca",
+          settings.customColors.defaultNodeColor,
+          ratio
+        );
       } else if (settings.colorBy === "betweenness") {
-        const maxBtw = Math.max(...customizedNodes.map((n) => n.betweenness || 0));
+        const maxBtw = Math.max(
+          ...customizedNodes.map((n) => n.betweenness || 0)
+        );
         const ratio = maxBtw > 0 ? (node.betweenness || 0) / maxBtw : 0;
         nodeColor = interpolateColor("#ffefca", "#FF5733", ratio);
       } else if (settings.colorBy === "pagerank") {
@@ -722,8 +758,7 @@ const Home = () => {
       ) {
         nodeColor = settings.customColors.highlightNodeColor;
       }
-  
-      // Highlight community border
+
       if (
         settings.highlightCommunities?.includes(parseInt(node.community, 10))
       ) {
@@ -731,32 +766,34 @@ const Home = () => {
       } else {
         node.isHighlightedCommunity = false;
       }
-  
-      // Highlight important nodes
+
       if (settings.showImportantNodes) {
         const threshold = settings.importantNodesThreshold || 0.5;
-        const maxBetweenness = Math.max(...customizedNodes.map((n) => n.betweenness || 0));
-        const maxPageRank = Math.max(...customizedNodes.map((n) => n.pagerank || 0));
+        const maxBetweenness = Math.max(
+          ...customizedNodes.map((n) => n.betweenness || 0)
+        );
+        const maxPageRank = Math.max(
+          ...customizedNodes.map((n) => n.pagerank || 0)
+        );
         const isImportant =
-          (node.betweenness / maxBetweenness > threshold) ||
-          (node.pagerank / maxPageRank > threshold);
-  
+          node.betweenness / maxBetweenness > threshold ||
+          node.pagerank / maxPageRank > threshold;
+
         if (isImportant) {
           nodeColor = settings.customColors.highlightNodeColor;
           nodeSize = Math.max(nodeSize, settings.nodeSizes.max * 0.8);
         }
       }
-  
+
       node.size = nodeSize;
       node.color = nodeColor;
     }
-  
+
     setCustomizedNetworkData({
       nodes: customizedNodes,
       links: customizedLinks,
     });
   };
-  
 
   const interpolateColor = (color1, color2, ratio) => {
     const r1 = parseInt(color1.substring(1, 3), 16);
@@ -1946,8 +1983,7 @@ const Home = () => {
                               ctx.lineWidth = 2;
                               ctx.stroke();
                               ctx.restore();
-                            }
-                            else if (isHighlighted) {
+                            } else if (isHighlighted) {
                               ctx.strokeStyle = "#ffff00";
                               ctx.lineWidth = 3;
                               ctx.stroke();
