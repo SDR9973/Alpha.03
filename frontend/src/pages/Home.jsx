@@ -658,6 +658,74 @@ const Home = () => {
         console.error("Error during community detection:", err);
       });
   };
+
+
+  const detectAndApplyCommunityData = () => {
+    if (!uploadedFile) {
+      setMessage("No file selected for community detection.");
+      return;
+    }
+  
+    const params = buildNetworkFilterParams();
+    params.append("algorithm", "louvain");
+  
+    const url = `http://localhost:8001/analyze/communities/${uploadedFile}?${params.toString()}`;
+  
+    console.log("Community detection URL:", url);
+    fetch(url)
+      .then((response) => response.json())
+      .then((data) => {
+        console.log("Community data returned from server:", data);
+  
+        if (data.communities && data.nodes) {
+          setCommunities(data.communities);
+  
+          const newCommunityMap = {};
+  
+          data.nodes.forEach((node) => {
+            if (node.community !== undefined) {
+              newCommunityMap[node.id.toString().trim()] = node.community;
+            }
+          });
+  
+          console.log("CommunityMap:", newCommunityMap);
+          setCommunityMap(newCommunityMap);
+  
+          if (networkData && networkData.nodes) {
+            const updatedNodes = networkData.nodes.map((node) => {
+              const normalizedId = node.id.toString().trim();
+              const community = newCommunityMap[normalizedId];
+  
+              if (community !== undefined) {
+                console.log(`Assigning node ${node.id} to community ${community}`);
+                return { ...node, community };
+              }
+  
+              return node;
+            });
+  
+            setNetworkData({
+              nodes: updatedNodes,
+              links: networkData.links,
+            });
+  
+            setOriginalNetworkData({
+              nodes: updatedNodes,
+              links: networkData.links,
+            });
+  
+            setMessage(`Detected ${data.communities.length} communities in the network.`);
+          }
+        } else {
+          setMessage("No community data returned from server.");
+        }
+      })
+      .catch((err) => {
+        setMessage("An error occurred during community detection.");
+        console.error("Error during community detection:", err);
+      });
+  };
+  
   
   const handleNetworkCustomization = (settings) => {
     setVisualizationSettings(settings);
@@ -1289,6 +1357,13 @@ const Home = () => {
   const handleToggleCommunitiesFilter = () => {
     if (!networkData || !originalNetworkData) return;
   
+
+    if (!communityMap || Object.keys(communityMap).length === 0) {
+      setMessage("Community data not found. Detecting communities...");
+      detectAndApplyCommunityData(); 
+      return; 
+    }
+
     const newState = !showOnlyIntraCommunityLinks;
     setShowOnlyIntraCommunityLinks(newState);
   
