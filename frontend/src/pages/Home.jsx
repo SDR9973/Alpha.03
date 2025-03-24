@@ -664,7 +664,6 @@ const Home = () => {
   
           const newCommunityMap = {};
   
-          // יצירת מיפוי של כל node ל-community
           data.nodes.forEach((node) => {
             if (node.community !== undefined) {
               newCommunityMap[node.id.toString().trim()] = node.community;
@@ -674,7 +673,6 @@ const Home = () => {
           console.log("CommunityMap:", newCommunityMap);
           setCommunityMap(newCommunityMap);
   
-          // עדכון הצמתים הקיימים לפי המיפוי
           if (networkData && networkData.nodes) {
             const updatedNodes = networkData.nodes.map((node) => {
               const normalizedId = node.id.toString().trim();
@@ -1393,7 +1391,7 @@ const Home = () => {
   
           return {
             ...node,
-            community, // עדכון הקהילה במקרה והיא לא הייתה קיימת
+            community, 
             originalX: node.x,
             originalY: node.y,
             x: center.x + (Math.random() * jitter * 2 - jitter),
