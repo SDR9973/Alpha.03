@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Depends
+from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordBearer
@@ -9,6 +9,7 @@ from uuid import uuid4
 from database import db
 from dotenv import load_dotenv
 from jose import jwt, JWTError
+from bs4 import BeautifulSoup
 import bcrypt
 import os
 import networkx as nx
@@ -16,22 +17,23 @@ import community as community_louvain
 import networkx.algorithms.community as nx_community
 import numpy
 import scipy
+import requests
+import re
+import logging
+
+
 import json
 
-# Load environment variables
 load_dotenv()
 
-# Configuration Constants
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
 UPLOAD_FOLDER = "./uploads/"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Initialize FastAPI
 app = FastAPI()
 
-# CORS Configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -40,10 +42,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# OAuth2 Configuration
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
-# Models for request/response data
 class UserCreate(BaseModel):
     name: str
     email: EmailStr
@@ -64,7 +64,6 @@ class OAuthUser(BaseModel):
     avatar: str
 
 
-# Utility Functions
 def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
     """
     Creates a JWT access token.
@@ -88,7 +87,6 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
-# Routes
 @app.get("/protected")
 async def protected_route(current_user: dict = Depends(get_current_user)):
     """
@@ -234,7 +232,6 @@ async def delete_user(user_id: str):
 
 
 
-# network analysis 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     try:
@@ -259,7 +256,7 @@ async def delete_file(filename: str):
 
 
 def anonymize_name(name, anonymized_map):
-    """ ממיר שם או מספר טלפון למזהה אנונימי ייחודי """
+   
     if name.startswith("\u202a+972") or name.startswith("+972"):
         name = f"Phone_{len(anonymized_map) + 1}"
     if name not in anonymized_map:
@@ -272,7 +269,7 @@ def parse_datetime(date: str, time: str):
     """Parses date & time from the request query and ensures HH:MM:SS format."""
     if not date:
         return None
-    if time and len(time) == 5:  # If time is in HH:MM format, add ":00"
+    if time and len(time) == 5:  
         time += ":00"
     try:
         return datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M:%S")
@@ -359,7 +356,7 @@ async def analyze_network(
 
         for line in selected_lines:
             try:
-                if "הושמטה" in line or "הושמט" in line:
+                if "omitted" in line or "omitted" in line:
                     continue
                 
                 if line.startswith("[") and "]" in line and ": " in line:
@@ -774,7 +771,6 @@ async def analyze_communities(
 
 
 
-# save reaserch to mongo db
 @app.post("/save-form")
 async def save_form(data: dict):
     
@@ -782,10 +778,8 @@ async def save_form(data: dict):
     Save form data into the Research_user collection in MongoDB.
     """
     try:
-        # הגדרת הקולקציה מתוך מסד הנתונים
         research_collection = db["Research_user"]
         
-        # מבנה הנתונים שיוכנס למסד
         form_data = {
             "name": data.get("name"),
             "description": data.get("description"),
@@ -795,11 +789,117 @@ async def save_form(data: dict):
             "created_at": datetime.utcnow(),
         }
         
-        # שמירת הנתונים למסד
         result = await research_collection.insert_one(form_data)
         
-        # החזרת תשובה למשתמש
         return {"message": "Form saved successfully", "id": str(result.inserted_id)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error saving form: {str(e)}")
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+@app.post("/fetch-wikipedia-data")
+async def fetch_wikipedia_data(request: Request):
+    data = await request.json()
+    logger.info(f"JSON Received: {data}")
+
+    url = data.get("url")
+    if not url:
+        raise HTTPException(status_code=400, detail="Missing Wikipedia URL")
+
+    try:
+        response = requests.get(url, headers={"User-Agent": "NetXplore-Bot/1.0"})
+        response.raise_for_status()
+        page_content = response.text
+        logger.info("Wikipedia page fetched successfully!")
+    except requests.RequestException as e:
+        logger.error(f"Error fetching Wikipedia page with requests: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching Wikipedia page: {str(e)}")
+
+    soup = BeautifulSoup(page_content, "html.parser")
+
+    discussion_container = soup.find("div", class_="mw-parser-output")
+
+    if not discussion_container:
+        logger.warning("Could not find discussion container. Trying with Selenium...")
+
+        options = webdriver.ChromeOptions()
+        options.add_argument("--headless")
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+
+        try:
+            driver.get(url)
+            time.sleep(3)
+            page_content = driver.page_source
+            soup = BeautifulSoup(page_content, "html.parser")
+            discussion_container = soup.find("div", class_="mw-parser-output")
+        finally:
+            driver.quit()
+
+        if not discussion_container:
+            logger.error("Failed to fetch discussion container even with Selenium!")
+            raise HTTPException(status_code=404, detail="Discussion content not found.")
+
+    logger.info(f"Found discussion container with {len(discussion_container.find_all())} elements")
+
+    discussion_blocks = discussion_container.find_all(["p", "ul", "li", "div"])
+
+    messages = []
+    participants = set()
+
+    for block in discussion_blocks:
+        text = block.get_text(strip=True)
+        if len(text) < 10:
+            continue  
+        username = None
+
+        user_links = block.find_all("a", href=True)
+        for link in user_links:
+            href = link["href"]
+            if "/wiki/משתמש:" in href or "/wiki/User:" in href:
+                username = link.get_text(strip=True)
+                participants.add(username)
+                break 
+
+        if not username:
+            bold_text = block.find("b") or block.find("strong")
+            if bold_text:
+                username = bold_text.get_text(strip=True)
+                participants.add(username)
+
+        if username:
+            indentation_level = len(re.match(r"^[:]*", text).group(0))
+            messages.append({"user": username, "text": text, "level": indentation_level})
+
+    logger.info(f"Extracted {len(messages)} messages from discussion.")
+
+    G = nx.DiGraph()
+
+    for user in participants:
+        G.add_node(user, group=1)
+
+    prev_user = None
+    for message in messages:
+        current_user = message["user"]
+
+        if prev_user and prev_user != current_user:
+            if G.has_edge(prev_user, current_user):
+                G[prev_user][current_user]["weight"] += 1
+            else:
+                G.add_edge(prev_user, current_user, weight=1)
+
+        prev_user = current_user
+
+    nodes_list = [{"id": node, "group": 1} for node in G.nodes()]
+    links_list = [{"source": source, "target": target, "weight": data["weight"]} for source, target, data in G.edges(data=True)]
+
+    if not messages:
+        logger.warning("No messages found in the discussion!")
+
+    return {
+        "nodes": nodes_list,
+        "links": links_list,
+        "messages": messages
+    }
     

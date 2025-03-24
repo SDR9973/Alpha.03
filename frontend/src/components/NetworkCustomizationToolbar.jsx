@@ -138,23 +138,77 @@ const NetworkCustomizationToolbar = ({
       setHighlightUsers([...highlightUsers, userId]);
     }
   };
+  const handleApplyCommunityColors = () => {
+    const updatedSettings = {
+      colorBy,
+      sizeBy,
+      highlightUsers,
+      highlightCommunities,
+      customColors,
+      nodeSizes,
+      colorScheme,
+      communityColors, 
+      showImportantNodes,
+      importantNodesThreshold,
+    };
 
-  const handleToggleCommunity = (communityId) => {
-    const id =
-      typeof communityId === "string" ? parseInt(communityId, 10) : communityId;
-
-    if (highlightCommunities.includes(id)) {
-      setHighlightCommunities(highlightCommunities.filter((cid) => cid !== id));
-    } else {
-      setHighlightCommunities([...highlightCommunities, id]);
-    }
+    console.log("Applying community colors:", communityColors);
+    onApplyCustomization(updatedSettings);
   };
 
+  const handleToggleCommunity = (communityId) => {
+    const id = typeof communityId === "string" ? parseInt(communityId, 10) : communityId;
+  
+    const newHighlightCommunities = highlightCommunities.includes(id)
+      ? highlightCommunities.filter((cid) => cid !== id)
+      : [...highlightCommunities, id];
+  
+    setHighlightCommunities(newHighlightCommunities);
+    setColorBy("community"); 
+  
+    const updatedSettings = {
+      colorBy: "community", 
+      sizeBy,
+      highlightUsers,
+      highlightCommunities: newHighlightCommunities,
+      customColors,
+      nodeSizes,
+      colorScheme,
+      communityColors,
+      showImportantNodes,
+      importantNodesThreshold,
+    };
+  
+    console.log("Applying updated settings (with colorBy: 'community'):", updatedSettings);
+    onApplyCustomization(updatedSettings);
+  };
+  
+
   const handleCommunityColorChange = (communityId, color) => {
-    setCommunityColors({
+    console.log(`Changing color for community ${communityId} to ${color}`);
+
+    const updatedCommunityColors = {
       ...communityColors,
       [communityId]: color,
-    });
+    };
+
+    setCommunityColors(updatedCommunityColors);
+
+    const updatedSettings = {
+      colorBy,
+      sizeBy,
+      highlightUsers,
+      highlightCommunities,
+      customColors,
+      nodeSizes,
+      colorScheme,
+      communityColors: updatedCommunityColors,
+      showImportantNodes,
+      importantNodesThreshold,
+    };
+
+    console.log("Applying color change immediately:", updatedSettings);
+    onApplyCustomization(updatedSettings);
   };
 
   const handleNodeSizeChange = (type, value) => {
@@ -185,7 +239,8 @@ const NetworkCustomizationToolbar = ({
       importantNodesThreshold,
     };
 
-    console.log("Applying customization with settings:", settings);
+    console.log("Apply button clicked. Settings:", settings);
+    console.log("Highlighted communities:", highlightCommunities);
     onApplyCustomization(settings);
   };
 

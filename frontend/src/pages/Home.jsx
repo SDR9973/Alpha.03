@@ -20,7 +20,6 @@ import {
 } from "react-bootstrap-icons";
 import { ForceGraph2D } from "react-force-graph";
 import "./Home.css";
-// Import custom styles
 import { AlertBox, GraphContainer } from "./Form.style.js";
 import AnonymizationToggle from "../components/AnonymizationToggle.jsx";
 import NetworkCustomizationToolbar from "../components/NetworkCustomizationToolbar.jsx";
@@ -75,13 +74,21 @@ const Home = () => {
   const [filteredComparisonData, setFilteredComparisonData] = useState({});
   const [communities, setCommunities] = useState([]);
   const [customizedNetworkData, setCustomizedNetworkData] = useState(null);
+  const [highlightCentralNodes, setHighlightCentralNodes] = useState(false);
+  const [selectedNode, setSelectedNode] = useState(null);
+  const [nodeToRemove, setNodeToRemove] = useState(null);
+  const [showRemoveNodeModal, setShowRemoveNodeModal] = useState(false);
+  const [activityFilterEnabled, setActivityFilterEnabled] = useState(false);
+  const [activityThreshold, setActivityThreshold] = useState(2);
   const forceGraphRef = useRef(null);
+  const [networkWasRestored, setNetworkWasRestored] = useState(false);
 
   const [visualizationSettings, setVisualizationSettings] = useState({
     colorBy: "default",
     sizeBy: "default",
     highlightUsers: [],
     highlightCommunities: [],
+    communityColors: {},
     customColors: {
       defaultNodeColor: "#050d2d",
       highlightNodeColor: "#00c6c2",
@@ -104,6 +111,36 @@ const Home = () => {
     importantNodesThreshold: 0.5,
   });
 
+  const loadCommunityColors = (communities) => {
+    if (!communities || communities.length === 0) {
+      console.log("No communities to set colors for");
+      return;
+    }
+
+    console.log("Setting up colors for", communities.length, "communities");
+
+    const communityColors = {};
+    communities.forEach((community, index) => {
+      const communityId = community.id;
+      const colorArray = visualizationSettings.customColors.communityColors;
+      communityColors[communityId] = colorArray[index % colorArray.length];
+      console.log(
+        `Community ${communityId} gets color ${communityColors[communityId]}`
+      );
+    });
+
+    const updatedSettings = {
+      ...visualizationSettings,
+      communityColors: communityColors,
+      colorBy: "community", 
+      highlightCommunities: [], 
+    };
+
+    setVisualizationSettings(updatedSettings);
+    console.log("Updated visualization settings:", updatedSettings);
+
+    handleNetworkCustomization(updatedSettings);
+  };
   const graphMetrics = [
     "Degree Centrality",
     "Betweenness Centrality",
@@ -222,6 +259,8 @@ const Home = () => {
       setMessage("No file selected for analysis.");
       return;
     }
+
+    setNetworkWasRestored(false);
 
     const params = buildNetworkFilterParams();
     const url = `http://localhost:8001/analyze/network/${uploadedFile}?${params.toString()}`;
@@ -403,6 +442,8 @@ const Home = () => {
     if (strongConnectionsActive) {
       setNetworkData(originalNetworkData);
       setStrongConnectionsActive(false);
+
+      setNetworkWasRestored(false);
     } else {
       const threshold = 0.2;
       const filteredNodes = networkData.nodes.filter(
@@ -426,6 +467,8 @@ const Home = () => {
     } else {
       setActiveComparisonIndices([...activeComparisonIndices, index]);
     }
+
+    setNetworkWasRestored(false);
   };
   const handleComparisonFileChange = (event, index) => {
     const selectedFile = event.target.files[0];
@@ -592,6 +635,7 @@ const Home = () => {
         console.log("Community data returned from server:", data);
         if (data.communities && data.nodes) {
           setCommunities(data.communities);
+          loadCommunityColors(data.communities); 
 
           if (networkData && networkData.nodes) {
             const updatedNodes = networkData.nodes.map((node) => {
@@ -624,127 +668,95 @@ const Home = () => {
         console.error("Error during community detection:", err);
       });
   };
-
   const handleNetworkCustomization = (settings) => {
     setVisualizationSettings(settings);
     console.log("Applying visualization settings:", settings);
-
+  
     if (!networkData) return;
-
+  
     const customizedNodes = JSON.parse(JSON.stringify(networkData.nodes));
     const customizedLinks = JSON.parse(JSON.stringify(networkData.links));
-
+  
     for (const node of customizedNodes) {
       let nodeSize = settings.nodeSizes.min;
       let nodeColor = settings.customColors.defaultNodeColor;
-
-      if (settings.sizeBy === "messages") {
-        const maxMessages = Math.max(
-          ...customizedNodes.map((n) => n.messages || 0)
-        );
-        const sizeRatio =
-          maxMessages > 0 ? (node.messages || 0) / maxMessages : 0;
-        nodeSize =
+  
+      // Size logic
+      const sizeByValue = (metric) => {
+        const maxVal = Math.max(...customizedNodes.map((n) => n[metric] || 0));
+        const ratio = maxVal > 0 ? (node[metric] || 0) / maxVal : 0;
+        return (
           settings.nodeSizes.min +
-          sizeRatio * (settings.nodeSizes.max - settings.nodeSizes.min);
-      } else if (settings.sizeBy === "degree") {
-        const maxDegree = Math.max(
-          ...customizedNodes.map((n) => n.degree || 0)
+          ratio * (settings.nodeSizes.max - settings.nodeSizes.min)
         );
-        const sizeRatio = maxDegree > 0 ? (node.degree || 0) / maxDegree : 0;
-        nodeSize =
-          settings.nodeSizes.min +
-          sizeRatio * (settings.nodeSizes.max - settings.nodeSizes.min);
-      } else if (settings.sizeBy === "betweenness") {
-        const maxBetweenness = Math.max(
-          ...customizedNodes.map((n) => n.betweenness || 0)
-        );
-        const sizeRatio =
-          maxBetweenness > 0 ? (node.betweenness || 0) / maxBetweenness : 0;
-        nodeSize =
-          settings.nodeSizes.min +
-          sizeRatio * (settings.nodeSizes.max - settings.nodeSizes.min);
-      } else if (settings.sizeBy === "pagerank") {
-        const maxPageRank = Math.max(
-          ...customizedNodes.map((n) => n.pagerank || 0)
-        );
-        const sizeRatio =
-          maxPageRank > 0 ? (node.pagerank || 0) / maxPageRank : 0;
-        nodeSize =
-          settings.nodeSizes.min +
-          sizeRatio * (settings.nodeSizes.max - settings.nodeSizes.min);
-      }
-
+      };
+  
+      if (settings.sizeBy === "messages") nodeSize = sizeByValue("messages");
+      else if (settings.sizeBy === "degree") nodeSize = sizeByValue("degree");
+      else if (settings.sizeBy === "betweenness") nodeSize = sizeByValue("betweenness");
+      else if (settings.sizeBy === "pagerank") nodeSize = sizeByValue("pagerank");
+  
+      // Color logic (prioritized properly)
       if (settings.colorBy === "community" && node.community !== undefined) {
-        const communityId = node.community;
-        const communityColors = settings.communityColors || {};
-        const defaultColors = settings.customColors.communityColors;
+        const communityId = parseInt(node.community, 10);
         nodeColor =
-          communityColors[communityId] ||
-          defaultColors[communityId % defaultColors.length];
+          settings.communityColors?.[communityId] ??
+          settings.customColors.communityColors[
+            communityId % settings.customColors.communityColors.length
+          ];
       } else if (settings.colorBy === "degree") {
-        const maxDegree = Math.max(
-          ...customizedNodes.map((n) => n.degree || 0)
-        );
+        const maxDegree = Math.max(...customizedNodes.map((n) => n.degree || 0));
         const ratio = maxDegree > 0 ? (node.degree || 0) / maxDegree : 0;
-        nodeColor = interpolateColor(
-          "#ffefca",
-          settings.customColors.defaultNodeColor,
-          ratio
-        );
+        nodeColor = interpolateColor("#ffefca", settings.customColors.defaultNodeColor, ratio);
       } else if (settings.colorBy === "betweenness") {
-        const maxBetweenness = Math.max(
-          ...customizedNodes.map((n) => n.betweenness || 0)
-        );
-        const ratio =
-          maxBetweenness > 0 ? (node.betweenness || 0) / maxBetweenness : 0;
+        const maxBtw = Math.max(...customizedNodes.map((n) => n.betweenness || 0));
+        const ratio = maxBtw > 0 ? (node.betweenness || 0) / maxBtw : 0;
         nodeColor = interpolateColor("#ffefca", "#FF5733", ratio);
       } else if (settings.colorBy === "pagerank") {
-        const maxPageRank = Math.max(
-          ...customizedNodes.map((n) => n.pagerank || 0)
-        );
-        const ratio = maxPageRank > 0 ? (node.pagerank || 0) / maxPageRank : 0;
+        const maxPR = Math.max(...customizedNodes.map((n) => n.pagerank || 0));
+        const ratio = maxPR > 0 ? (node.pagerank || 0) / maxPR : 0;
         nodeColor = interpolateColor("#ffefca", "#3366CC", ratio);
-      } else if (settings.colorBy === "custom") {
-        if (settings.highlightUsers.includes(node.id)) {
-          nodeColor = settings.customColors.highlightNodeColor;
-        }
-      }
-
-      if (
-        node.community !== undefined &&
-        settings.highlightCommunities.includes(node.community)
+      } else if (
+        settings.colorBy === "custom" &&
+        settings.highlightUsers.includes(node.id)
       ) {
         nodeColor = settings.customColors.highlightNodeColor;
       }
-
+  
+      // Highlight community border
+      if (
+        settings.highlightCommunities?.includes(parseInt(node.community, 10))
+      ) {
+        node.isHighlightedCommunity = true;
+      } else {
+        node.isHighlightedCommunity = false;
+      }
+  
+      // Highlight important nodes
       if (settings.showImportantNodes) {
         const threshold = settings.importantNodesThreshold || 0.5;
-        const maxBetweenness = Math.max(
-          ...customizedNodes.map((n) => n.betweenness || 0)
-        );
-        const maxPageRank = Math.max(
-          ...customizedNodes.map((n) => n.pagerank || 0)
-        );
-
-        if (
-          node.betweenness / maxBetweenness > threshold ||
-          node.pagerank / maxPageRank > threshold
-        ) {
+        const maxBetweenness = Math.max(...customizedNodes.map((n) => n.betweenness || 0));
+        const maxPageRank = Math.max(...customizedNodes.map((n) => n.pagerank || 0));
+        const isImportant =
+          (node.betweenness / maxBetweenness > threshold) ||
+          (node.pagerank / maxPageRank > threshold);
+  
+        if (isImportant) {
           nodeColor = settings.customColors.highlightNodeColor;
           nodeSize = Math.max(nodeSize, settings.nodeSizes.max * 0.8);
         }
       }
-
+  
       node.size = nodeSize;
       node.color = nodeColor;
     }
-
+  
     setCustomizedNetworkData({
       nodes: customizedNodes,
       links: customizedLinks,
     });
   };
+  
 
   const interpolateColor = (color1, color2, ratio) => {
     const r1 = parseInt(color1.substring(1, 3), 16);
@@ -967,19 +979,67 @@ const Home = () => {
         linkColor={() => linkColor}
         nodeCanvasObject={(node, ctx, globalScale) => {
           const fontSize = 12 / globalScale;
-          const radius = getNodeSize(node);
+
+          const radius =
+            node.size ||
+            (selectedMetric === "PageRank Centrality"
+              ? Math.max(10, node.pagerank * 500)
+              : selectedMetric === "Eigenvector Centrality"
+              ? Math.max(10, node.eigenvector * 60)
+              : selectedMetric === "Closeness Centrality"
+              ? Math.max(10, node.closeness * 50)
+              : selectedMetric === "Betweenness Centrality"
+              ? Math.max(10, node.betweenness * 80)
+              : selectedMetric === "Degree Centrality"
+              ? Math.max(10, node.degree * 80)
+              : 20);
 
           ctx.save();
           ctx.beginPath();
           ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI, false);
 
-          ctx.fillStyle =
-            node.isCommon && highlightCommonNodes ? "#FF5733" : baseColor;
+          const isCommunityHighlighted =
+            node.community !== undefined &&
+            visualizationSettings.highlightCommunities &&
+            visualizationSettings.highlightCommunities.includes(
+              parseInt(node.community, 10)
+            );
+
+          const isNodeHighlighted = node.highlighted && highlightCentralNodes;
+
+          let nodeColor;
+
+          if (node.color) {
+            nodeColor = node.color;
+          } else if (selectedMetric === "PageRank Centrality") {
+            nodeColor = "orange";
+          } else if (selectedMetric === "Eigenvector Centrality") {
+            nodeColor = "purple";
+          } else if (selectedMetric === "Closeness Centrality") {
+            nodeColor = "green";
+          } else if (selectedMetric === "Betweenness Centrality") {
+            nodeColor = "red";
+          } else if (selectedMetric === "Degree Centrality") {
+            nodeColor = "#231d81";
+          } else {
+            nodeColor = "blue";
+          }
+
+          ctx.fillStyle = nodeColor;
           ctx.fill();
 
-          if (node.isCommon && highlightCommonNodes) {
-            ctx.strokeStyle = "#FFFF00";
-            ctx.lineWidth = 2;
+          if (isCommunityHighlighted) {
+            ctx.strokeStyle =
+              visualizationSettings.customColors.highlightNodeColor;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            console.log(
+              `Rendering highlighted community node: ${node.id}, community: ${node.community}, color: ${nodeColor}`
+            );
+          } else if (isNodeHighlighted) {
+            ctx.strokeStyle = "#ffff00";
+            ctx.lineWidth = 3;
             ctx.stroke();
           }
 
@@ -989,64 +1049,248 @@ const Home = () => {
           ctx.fillStyle = "white";
           ctx.fillText(node.id, node.x, node.y);
 
-          const metrics =
-            filteredOriginalData && filteredComparisonData
-              ? comparisonMetrics
-              : isComparisonGraph
-              ? comparisonMetrics
-              : selectedMetric
-              ? [selectedMetric]
-              : [];
-
-          if (metrics.length > 0) {
-            ctx.fillStyle = "black";
-            let yOffset = radius + 5;
-
-            if (metrics.includes("Degree Centrality")) {
-              ctx.fillText(
-                `Deg: ${node.degree || 0}`,
-                node.x,
-                node.y + yOffset
-              );
-              yOffset += fontSize;
-            }
-            if (metrics.includes("Betweenness Centrality")) {
-              ctx.fillText(
-                `Btw: ${node.betweenness?.toFixed(2) || 0}`,
-                node.x,
-                node.y + yOffset
-              );
-              yOffset += fontSize;
-            }
-            if (metrics.includes("Closeness Centrality")) {
-              ctx.fillText(
-                `Cls: ${node.closeness?.toFixed(2) || 0}`,
-                node.x,
-                node.y + yOffset
-              );
-              yOffset += fontSize;
-            }
-            if (metrics.includes("Eigenvector Centrality")) {
-              ctx.fillText(
-                `Eig: ${node.eigenvector?.toFixed(4) || 0}`,
-                node.x,
-                node.y + yOffset
-              );
-              yOffset += fontSize;
-            }
-            if (metrics.includes("PageRank Centrality")) {
-              ctx.fillText(
-                `PR: ${node.pagerank?.toFixed(4) || 0}`,
-                node.x,
-                node.y + yOffset
-              );
-            }
+          if (selectedMetric === "Degree Centrality") {
+            ctx.fillStyle = "#231d81";
+            ctx.fillText(`Deg: ${node.degree}`, node.x, node.y + radius + 5);
           }
-
+          if (selectedMetric === "Betweenness Centrality") {
+            ctx.fillStyle = "DarkRed";
+            ctx.fillText(
+              `Btw: ${node.betweenness?.toFixed(2) || 0}`,
+              node.x,
+              node.y + radius + 5
+            );
+          }
+          if (selectedMetric === "Closeness Centrality") {
+            ctx.fillStyle = "green";
+            ctx.fillText(
+              `Cls: ${node.closeness?.toFixed(2) || 0}`,
+              node.x,
+              node.y + radius + 5
+            );
+          }
+          if (selectedMetric === "Eigenvector Centrality") {
+            ctx.fillStyle = "purple";
+            ctx.fillText(
+              `Eig: ${node.eigenvector?.toFixed(4) || 0}`,
+              node.x,
+              node.y + radius + 5
+            );
+          }
+          if (selectedMetric === "PageRank Centrality") {
+            ctx.fillStyle = "orange";
+            ctx.fillText(
+              `PR: ${node.pagerank?.toFixed(4) || 0}`,
+              node.x,
+              node.y + radius + 5
+            );
+          }
           ctx.restore();
         }}
       />
     );
+  };
+
+  const handleHighlightCentralNodes = () => {
+    if (!networkData) return;
+
+    setHighlightCentralNodes(!highlightCentralNodes);
+
+    setNetworkWasRestored(false);
+
+    if (!highlightCentralNodes) {
+      let centralityMeasure = "degree";
+      if (selectedMetric === "Betweenness Centrality")
+        centralityMeasure = "betweenness";
+      else if (selectedMetric === "Closeness Centrality")
+        centralityMeasure = "closeness";
+      else if (selectedMetric === "Eigenvector Centrality")
+        centralityMeasure = "eigenvector";
+      else if (selectedMetric === "PageRank Centrality")
+        centralityMeasure = "pagerank";
+
+      setNetworkWasRestored(false);
+
+      const updatedNodes = networkData.nodes.map((node) => {
+        const centralityValue = node[centralityMeasure] || 0;
+        const sortedNodes = [...networkData.nodes].sort(
+          (a, b) => (b[centralityMeasure] || 0) - (a[centralityMeasure] || 0)
+        );
+
+        const thresholdIndex = Math.floor(sortedNodes.length * 0.2);
+        const threshold =
+          thresholdIndex >= 0 && thresholdIndex < sortedNodes.length
+            ? sortedNodes[thresholdIndex][centralityMeasure] || 0
+            : 0;
+
+        return {
+          ...node,
+          highlighted: centralityValue >= threshold,
+        };
+      });
+
+      setNetworkData({
+        ...networkData,
+        nodes: updatedNodes,
+      });
+    } else {
+      const resetNodes = networkData.nodes.map((node) => ({
+        ...node,
+        highlighted: false,
+      }));
+
+      setNetworkData({
+        ...networkData,
+        nodes: resetNodes,
+      });
+    }
+  };
+
+  const handleNodeClick = (node) => {
+    if (networkWasRestored) {
+      setSelectedNode(node);
+      setShowRemoveNodeModal(true);
+    }
+  };
+
+  const handleRemoveNode = () => {
+    if (!selectedNode || !networkData) return;
+
+    const updatedNodes = networkData.nodes.filter(
+      (node) => node.id !== selectedNode.id
+    );
+
+    const updatedLinks = networkData.links.filter(
+      (link) =>
+        link.source !== selectedNode.id &&
+        link.target !== selectedNode.id &&
+        link.source.id !== selectedNode.id &&
+        link.target.id !== selectedNode.id
+    );
+
+    if (!originalNetworkData) {
+      setOriginalNetworkData(JSON.parse(JSON.stringify(networkData)));
+    }
+
+    setNetworkData({
+      nodes: updatedNodes,
+      links: updatedLinks,
+    });
+
+    setShowRemoveNodeModal(false);
+    setSelectedNode(null);
+  };
+
+  const handleRestoreNetwork = () => {
+    if (originalNetworkData) {
+      if (networkWasRestored) {
+        setNetworkWasRestored(false);
+      } else {
+        setNetworkData(JSON.parse(JSON.stringify(originalNetworkData)));
+        setNetworkWasRestored(true);
+
+        if (activityFilterEnabled) {
+          setActivityFilterEnabled(false);
+        }
+      }
+    }
+  };
+
+  const handleActivityFilter = () => {
+    if (!networkData) return;
+
+    const newState = !activityFilterEnabled;
+    setActivityFilterEnabled(newState);
+
+    if (newState) {
+      if (!originalNetworkData) {
+        setOriginalNetworkData(JSON.parse(JSON.stringify(networkData)));
+        setNetworkWasRestored(false);
+      }
+
+      const connectionCounts = {};
+      networkData.nodes.forEach((node) => {
+        connectionCounts[node.id] = 0;
+      });
+
+      networkData.links.forEach((link) => {
+        const sourceId =
+          typeof link.source === "object" ? link.source.id : link.source;
+        const targetId =
+          typeof link.target === "object" ? link.target.id : link.target;
+
+        connectionCounts[sourceId] = (connectionCounts[sourceId] || 0) + 1;
+        connectionCounts[targetId] = (connectionCounts[targetId] || 0) + 1;
+      });
+
+      const activeNodes = networkData.nodes.filter(
+        (node) => connectionCounts[node.id] >= activityThreshold
+      );
+
+      const activeLinks = networkData.links.filter((link) => {
+        const sourceId =
+          typeof link.source === "object" ? link.source.id : link.source;
+        const targetId =
+          typeof link.target === "object" ? link.target.id : link.target;
+
+        return (
+          activeNodes.some((node) => node.id === sourceId) &&
+          activeNodes.some((node) => node.id === targetId)
+        );
+      });
+
+      setNetworkData({
+        nodes: activeNodes,
+        links: activeLinks,
+      });
+    } else {
+      if (originalNetworkData) {
+        setNetworkData(JSON.parse(JSON.stringify(originalNetworkData)));
+        setNetworkWasRestored(true);
+      }
+    }
+  };
+
+  const applyActivityFilter = (threshold) => {
+    if (!networkData) return;
+    if (!originalNetworkData && !activityFilterEnabled) {
+      setOriginalNetworkData(JSON.parse(JSON.stringify(networkData)));
+    }
+    const connectionCounts = {};
+    networkData.nodes.forEach((node) => {
+      connectionCounts[node.id] = 0;
+    });
+
+    networkData.links.forEach((link) => {
+      const sourceId =
+        typeof link.source === "object" ? link.source.id : link.source;
+      const targetId =
+        typeof link.target === "object" ? link.target.id : link.target;
+
+      connectionCounts[sourceId] = (connectionCounts[sourceId] || 0) + 1;
+      connectionCounts[targetId] = (connectionCounts[targetId] || 0) + 1;
+    });
+
+    const activeNodes = networkData.nodes.filter(
+      (node) => connectionCounts[node.id] >= threshold
+    );
+
+    const activeLinks = networkData.links.filter((link) => {
+      const sourceId =
+        typeof link.source === "object" ? link.source.id : link.source;
+      const targetId =
+        typeof link.target === "object" ? link.target.id : link.target;
+
+      return (
+        activeNodes.some((node) => node.id === sourceId) &&
+        activeNodes.some((node) => node.id === targetId)
+      );
+    });
+
+    setNetworkData({
+      nodes: activeNodes,
+      links: activeLinks,
+    });
   };
 
   return (
@@ -1108,6 +1352,7 @@ const Home = () => {
               <Button className="upload-btn" onClick={handleUploadClick}>
                 <Upload size={16} /> Upload File
               </Button>
+
               <Form.Control
                 type="file"
                 accept=".txt"
@@ -1125,7 +1370,7 @@ const Home = () => {
           </Row>
         </Form>
       </Card>
-      {/* Research Filters */}
+
       {uploadedFile && (
         <div>
           <Card className="research-card">
@@ -1363,6 +1608,32 @@ const Home = () => {
               </div>
             )}
           </Card>
+          {activityFilterEnabled && (
+            <Card className="research-card mt-3">
+              <h4 className="fw-bold">Activity Threshold</h4>
+              <p>Show users with at least this many connections:</p>
+              <Form.Group>
+                <div className="d-flex align-items-center">
+                  <Form.Range
+                    min={1}
+                    max={10}
+                    value={activityThreshold}
+                    onChange={(e) => {
+                      const newThreshold = parseInt(e.target.value, 10);
+                      setActivityThreshold(newThreshold);
+                      if (activityFilterEnabled && originalNetworkData) {
+                        applyActivityFilter(newThreshold);
+                      }
+                    }}
+                    className="flex-grow-1 me-2"
+                  />
+                  <div className="activity-value-display">
+                    {activityThreshold}
+                  </div>
+                </div>
+              </Form.Group>
+            </Card>
+          )}
 
           {uploadedFile && (
             <Row className="mt-4">
@@ -1415,6 +1686,32 @@ const Home = () => {
                         {strongConnectionsActive
                           ? "Show All Connections"
                           : "Strongest Connections"}
+                      </Button>
+                      <Button
+                        className={`metrics-item ${
+                          highlightCentralNodes ? "active" : ""
+                        }`}
+                        onClick={handleHighlightCentralNodes}
+                      >
+                        Highlight Central Nodes
+                      </Button>
+                      <Button
+                        className={`metrics-item ${
+                          networkWasRestored ? "active" : ""
+                        }`}
+                        onClick={handleRestoreNetwork}
+                      >
+                        Restore Original Network
+                      </Button>
+                      <Button
+                        className={`metrics-item ${
+                          activityFilterEnabled === true ? "active" : ""
+                        }`}
+                        onClick={handleActivityFilter}
+                      >
+                        {activityFilterEnabled
+                          ? "Show All Users"
+                          : "Hide Inactive Users"}
                       </Button>
                     </div>
                   )}
@@ -1497,12 +1794,6 @@ const Home = () => {
                 )}
 
                 <Card className="graph-card">
-                  {/* <span
-                    className="position-absolute top-0 end-0 p-2 text-muted"
-                    style={{ cursor: "pointer" }}
-                  >
-                    Save{" "}
-                  </span> */}
                   <div className="graph-placeholder">
                     {networkData && (
                       <GraphContainer>
@@ -1573,6 +1864,7 @@ const Home = () => {
                           cooldownTicks={100}
                           d3AlphaDecay={0.03}
                           d3VelocityDecay={0.2}
+                          onNodeClick={handleNodeClick}
                           onEngineStop={() =>
                             forceGraphRef.current?.zoomToFit(400, 100)
                           }
@@ -1623,21 +1915,43 @@ const Home = () => {
                               false
                             );
 
-                            ctx.fillStyle =
-                              node.color ||
-                              (selectedMetric === "PageRank Centrality"
-                                ? "orange"
-                                : selectedMetric === "Eigenvector Centrality"
-                                ? "purple"
-                                : selectedMetric === "Closeness Centrality"
-                                ? "green"
-                                : selectedMetric === "Betweenness Centrality"
-                                ? "red"
-                                : selectedMetric === "Degree Centrality"
-                                ? "#231d81"
-                                : node.color || "blue");
+                            const isHighlighted =
+                              node.highlighted && highlightCentralNodes;
 
+                            const nodeColor = isHighlighted
+                              ? "#ff9900"
+                              : node.color ||
+                                (selectedMetric === "PageRank Centrality"
+                                  ? "orange"
+                                  : selectedMetric === "Eigenvector Centrality"
+                                  ? "purple"
+                                  : selectedMetric === "Closeness Centrality"
+                                  ? "green"
+                                  : selectedMetric === "Betweenness Centrality"
+                                  ? "red"
+                                  : selectedMetric === "Degree Centrality"
+                                  ? "#231d81"
+                                  : "blue");
+
+                            ctx.fillStyle = nodeColor;
                             ctx.fill();
+
+                            if (node.isHighlightedCommunity) {
+                              ctx.save();
+                              ctx.shadowColor = "#231d81";
+                              ctx.shadowBlur = 15;
+                              ctx.shadowOffsetX = 0;
+                              ctx.shadowOffsetY = 0;
+                              ctx.strokeStyle = "#ffffff";
+                              ctx.lineWidth = 2;
+                              ctx.stroke();
+                              ctx.restore();
+                            }
+                            else if (isHighlighted) {
+                              ctx.strokeStyle = "#ffff00";
+                              ctx.lineWidth = 3;
+                              ctx.stroke();
+                            }
 
                             ctx.font = `${fontSize}px Sans-Serif`;
                             ctx.textAlign = "center";
@@ -1687,6 +2001,13 @@ const Home = () => {
                             }
 
                             ctx.restore();
+                          }}
+                          onNodeHover={(node) => {
+                            if (node && networkWasRestored) {
+                              document.body.style.cursor = "pointer";
+                            } else {
+                              document.body.style.cursor = "default";
+                            }
                           }}
                         />
                       </GraphContainer>
@@ -2003,6 +2324,54 @@ const Home = () => {
               </Card>
             </Row>
           )}
+        </div>
+      )}
+      {/* Node Removal Modal */}
+      {showRemoveNodeModal && selectedNode && (
+        <div
+          className="modal show d-block"
+          tabIndex="-1"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+        >
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Remove Node from Network</h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setShowRemoveNodeModal(false)}
+                  aria-label="Close"
+                ></button>
+              </div>
+              <div className="modal-body">
+                <p>
+                  Are you sure you want to remove the node{" "}
+                  <strong>"{selectedNode.id}"</strong> from the network?
+                </p>
+                <p>
+                  This will help analyze the impact of this user on the network
+                  structure.
+                </p>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowRemoveNodeModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={handleRemoveNode}
+                >
+                  Remove Node
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </Container>
