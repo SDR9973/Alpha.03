@@ -592,56 +592,7 @@ const Home = () => {
       commonNodesCount,
     };
   };
-  // const fetchCommunityData = () => {
-  //   if (!uploadedFile) {
-  //     setMessage("No file selected for community detection.");
-  //     return;
-  //   }
-
-  //   const params = buildNetworkFilterParams();
-  //   params.append("algorithm", "louvain");
-
-  //   const url = `http://localhost:8001/analyze/communities/${uploadedFile}?${params.toString()}`;
-
-  //   console.log("Community detection URL:", url);
-  //   fetch(url)
-  //     .then((response) => response.json())
-  //     .then((data) => {
-  //       console.log("Community data returned from server:", data);
-  //       if (data.communities && data.nodes) {
-  //         setCommunities(data.communities);
-
-  //         if (networkData && networkData.nodes) {
-  //           const updatedNodes = networkData.nodes.map((node) => {
-  //             const matchingNode = data.nodes.find((n) => n.id === node.id);
-  //             if (matchingNode && matchingNode.community !== undefined) {
-  //               return { ...node, community: matchingNode.community };
-  //             }
-  //             return node;
-  //           });
-
-  //           setNetworkData({
-  //             nodes: updatedNodes,
-  //             links: networkData.links,
-  //           });
-  //           setOriginalNetworkData({
-  //             nodes: updatedNodes,
-  //             links: networkData.links,
-  //           });
-  //         }
-
-  //         setMessage(
-  //           `Detected ${data.communities.length} communities in the network.`
-  //         );
-  //       } else {
-  //         setMessage("No community data returned from server.");
-  //       }
-  //     })
-  //     .catch((err) => {
-  //       setMessage("An error occurred during community detection.");
-  //       console.error("Error during community detection:", err);
-  //     });
-  // };
+  
   const fetchCommunityData = () => {
     if (!uploadedFile) {
       setMessage("No file selected for community detection.");
