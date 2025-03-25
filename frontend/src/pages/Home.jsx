@@ -89,6 +89,7 @@ const Home = () => {
     sizeBy: "default",
     highlightUsers: [],
     highlightCommunities: [],
+    communityNames: {},
     communityColors: {},
     customColors: {
       defaultNodeColor: "#050d2d",
@@ -104,8 +105,8 @@ const Home = () => {
       edgeColor: "rgba(128, 128, 128, 0.6)",
     },
     nodeSizes: {
-      min: 10,
-      max: 30,
+      min: 15,
+      max: 40,
     },
     colorScheme: "default",
     showImportantNodes: false,
@@ -121,10 +122,13 @@ const Home = () => {
     console.log("Setting up colors for", communities.length, "communities");
 
     const communityColors = {};
+    const communityNames = {};
+
     communities.forEach((community, index) => {
       const communityId = community.id;
       const colorArray = visualizationSettings.customColors.communityColors;
       communityColors[communityId] = colorArray[index % colorArray.length];
+      communityNames[communityId] = `Community ${communityId}`;
       console.log(
         `Community ${communityId} gets color ${communityColors[communityId]}`
       );
@@ -133,6 +137,7 @@ const Home = () => {
     const updatedSettings = {
       ...visualizationSettings,
       communityColors: communityColors,
+      communityNames: communityNames,
       colorBy: "community",
       highlightCommunities: [],
     };
@@ -646,7 +651,6 @@ const Home = () => {
         if (data.communities && data.nodes) {
           setCommunities(data.communities);
 
-          // Update nodes with community info
           const updatedNodes = networkData.nodes.map((node) => {
             const matchingNode = data.nodes.find((n) => n.id === node.id);
             if (matchingNode && matchingNode.community !== undefined) {
@@ -665,6 +669,7 @@ const Home = () => {
 
           // Automatically apply community colors
           const communityColors = {};
+          const communityNames = {};
           const colorArray = visualizationSettings.customColors.communityColors;
 
           data.communities.forEach((community, index) => {
@@ -673,9 +678,14 @@ const Home = () => {
               colorArray[index % colorArray.length];
           });
 
+          data.communities.forEach((community) => {
+            communityNames[community.id] = `Community ${community.id}`;
+          });
+
           const updatedSettings = {
             ...visualizationSettings,
             communityColors: communityColors,
+            communityNames: communityNames,
             colorBy: "community",
             highlightCommunities: [],
           };
@@ -1061,7 +1071,14 @@ const Home = () => {
           } else {
             nodeColor = "blue";
           }
-
+          if (node.isHighlightedCommunity && node.community !== undefined) {
+            const communityName =
+              visualizationSettings.communityNames?.[node.community] ||
+              `Community ${node.community}`;
+            ctx.fillStyle = "#F5BD20";
+            ctx.font = `${fontSize * 0.8}px Sans-Serif`;
+            ctx.fillText(communityName, node.x, node.y + radius + 15);
+          }
           ctx.fillStyle = nodeColor;
           ctx.fill();
 
@@ -1975,11 +1992,11 @@ const Home = () => {
 
                             if (node.isHighlightedCommunity) {
                               ctx.save();
-                              ctx.shadowColor = "#231d81";
+                              ctx.shadowColor = "#F5BD20";
                               ctx.shadowBlur = 15;
                               ctx.shadowOffsetX = 0;
                               ctx.shadowOffsetY = 0;
-                              ctx.strokeStyle = "#ffffff";
+                              ctx.strokeStyle = "#F5BD20";
                               ctx.lineWidth = 2;
                               ctx.stroke();
                               ctx.restore();
