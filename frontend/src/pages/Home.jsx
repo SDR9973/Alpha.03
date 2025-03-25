@@ -179,7 +179,6 @@ const Home = () => {
     }
     if (networkData) {
       calculateNetworkStats();
-      // fetchCommunityData();
     }
     if (
       shouldFetchCommunities &&
