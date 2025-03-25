@@ -667,7 +667,6 @@ const Home = () => {
           setNetworkData(updatedNetwork);
           setOriginalNetworkData(updatedNetwork);
 
-          // Automatically apply community colors
           const communityColors = {};
           const communityNames = {};
           const colorArray = visualizationSettings.customColors.communityColors;
