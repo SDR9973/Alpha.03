@@ -19,8 +19,8 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database import get_db
-from models import User, Research, UploadedFile, NetworkAnalysis
+from backend.database import get_db
+from backend.models import User, Research, UploadedFile, NetworkAnalysis
 
 # Load environment variables
 load_dotenv()

@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, Text, Float
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 
-from .database import Base
+from backend.database import Base
 
 
 class User(Base):

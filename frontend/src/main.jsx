@@ -1,3 +1,4 @@
+// src/main.jsx
 import 'aframe';
 
 if (!window.AFRAME) {
