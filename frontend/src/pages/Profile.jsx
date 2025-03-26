@@ -1,93 +1,153 @@
-import React, { useEffect } from "react";
+// src/pages/Profile.jsx
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import Button from "react-bootstrap/Button";
-import Container from "react-bootstrap/Container";
-import { useDispatch, useSelector } from "react-redux";
-import { logoutUser, deleteUser } from "../redux/user/userSlice";
-import Menu from "../components/Menu/Menu.jsx"; 
-
+import { Button, Container, Row, Col, Card, Alert, Modal, Spinner } from "react-bootstrap";
+import { useAuth } from "../providers/AuthProvider";
 
 const Profile = () => {
   const navigate = useNavigate();
-  const dispatch = useDispatch();
-  const { currentUser, token } = useSelector((state) => state.user);
-
-  useEffect(() => {
-    if (!currentUser || !token) {
-      console.log("User not authenticated, redirecting to sign-in...");
-      navigate("/sign-in");
-    }
-  }, [currentUser, token, navigate]);
-
-  const handleLogout = () => {
-    dispatch(logoutUser());
-    localStorage.removeItem("token");
+  const { user, logout, deleteAccount, isLoading } = useAuth();
+  
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  // If no user, redirect to login (this should not happen due to ProtectedRoute)
+  if (!user) {
     navigate("/sign-in");
-  };
-
+    return null;
+  }
+  
   const handleEditProfile = () => {
     navigate("/edit-profile");
   };
-
-  const handleDeleteAccount = async () => {
-    if (!window.confirm("Are you sure you want to delete your account?")) {
-      return;
-    }
-
+  
+  const handleLogout = () => {
+    logout();
+  };
+  
+  const handleDeleteAccountClick = () => {
+    setShowDeleteModal(true);
+  };
+  
+  const handleDeleteAccountConfirm = async () => {
+    setIsDeleting(true);
+    setDeleteError("");
+    
     try {
-      const response = await fetch(`http://localhost:8000/users/${currentUser.id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to delete account");
-      }
-
-      dispatch(deleteUser());
-      localStorage.removeItem("token");
-      navigate("/sign-in");
+      await deleteAccount(user.id);
+      // No need to navigate as the hook will handle that
     } catch (error) {
-      alert(error.message);
+      setDeleteError(error.message || "Failed to delete account. Please try again.");
+      setIsDeleting(false);
     }
   };
-
-  if (!currentUser || !token) {
-    return <p>Loading your profile...</p>;
-  }
-
-  const avatarUrl = currentUser.avatar || "";
-
+  
+  const handleCloseDeleteModal = () => {
+    setShowDeleteModal(false);
+    setDeleteError("");
+  };
+  
+  const avatarUrl = user.avatar || "https://cdn-icons-png.flaticon.com/512/64/64572.png";
+  
   return (
-    <>
-      <Menu />
-    <Container className="text-center mt-5">
-      <div className="mb-4">
-        <img
-          src={avatarUrl}
-          alt="Profile"
-          className="rounded-circle img-thumbnail"
-          style={{ width: "150px", height: "150px" }}
-        />
-      </div>
-      <h2>Welcome, {currentUser.name}!</h2>
-      <p>Email: {currentUser.email}</p>
-      <div className="mt-4">
-        <Button variant="primary" className="me-2" onClick={handleEditProfile}>
-          Edit Profile
-        </Button>
-        <Button variant="danger" className="me-2" onClick={handleLogout}>
-          Logout
-        </Button>
-        <Button variant="outline-danger" onClick={handleDeleteAccount}>
-          Delete Account
-        </Button>
-      </div>
+    <Container className="py-5">
+      <Row className="justify-content-center">
+        <Col md={8} lg={6}>
+          <Card className="shadow">
+            <Card.Header className="bg-primary text-white">
+              <h4 className="mb-0">User Profile</h4>
+            </Card.Header>
+            
+            <Card.Body className="text-center py-4">
+              <div className="mb-4">
+                <img
+                  src={avatarUrl}
+                  alt="Profile"
+                  className="rounded-circle img-thumbnail"
+                  style={{ width: "150px", height: "150px", objectFit: "cover" }}
+                />
+              </div>
+              
+              <h3>{user.name}</h3>
+              <p className="text-muted mb-4">{user.email}</p>
+              
+              <div className="d-grid gap-2 d-md-block">
+                <Button 
+                  variant="primary" 
+                  className="me-md-2 mb-2 mb-md-0"
+                  onClick={handleEditProfile}
+                  disabled={isLoading}
+                >
+                  Edit Profile
+                </Button>
+                <Button 
+                  variant="outline-primary" 
+                  className="me-md-2 mb-2 mb-md-0"
+                  onClick={handleLogout}
+                  disabled={isLoading}
+                >
+                  Logout
+                </Button>
+                <Button 
+                  variant="outline-danger"
+                  onClick={handleDeleteAccountClick}
+                  disabled={isLoading}
+                >
+                  Delete Account
+                </Button>
+              </div>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
+      
+      {/* Delete Account Confirmation Modal */}
+      <Modal show={showDeleteModal} onHide={handleCloseDeleteModal} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Delete Account</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {deleteError && (
+            <Alert variant="danger" className="mb-3">
+              {deleteError}
+            </Alert>
+          )}
+          <p>Are you sure you want to delete your account? This action cannot be undone.</p>
+          <p>All your data will be permanently removed.</p>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button 
+            variant="secondary" 
+            onClick={handleCloseDeleteModal}
+            disabled={isDeleting}
+          >
+            Cancel
+          </Button>
+          <Button 
+            variant="danger" 
+            onClick={handleDeleteAccountConfirm}
+            disabled={isDeleting}
+          >
+            {isDeleting ? (
+              <>
+                <Spinner
+                  as="span"
+                  animation="border"
+                  size="sm"
+                  role="status"
+                  aria-hidden="true"
+                  className="me-2"
+                />
+                Deleting...
+              </>
+            ) : (
+              "Delete Account"
+            )}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </Container>
-    </>
   );
 };
 

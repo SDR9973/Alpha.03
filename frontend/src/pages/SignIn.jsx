@@ -1,18 +1,29 @@
-import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { useDispatch } from "react-redux";
-import { setUser } from "../redux/user/userSlice";
-import Button from "react-bootstrap/Button";
-import Form from "react-bootstrap/Form";
-import Container from "react-bootstrap/Container";
+// src/pages/SignIn.jsx
+import React, { useState, useEffect } from "react";
+import { useNavigate, Link, useLocation } from "react-router-dom";
+import { Button, Form, Container, Alert, Spinner } from "react-bootstrap";
+import { useAuth } from "../providers/AuthProvider";
 import OAuth from "../components/OAuth.jsx";
 
 const SignIn = () => {
   const [formData, setFormData] = useState({ email: "", password: "" });
-  const [error, setError] = useState("");
+  const [formError, setFormError] = useState("");
   const navigate = useNavigate();
-  const dispatch = useDispatch();
-
+  const location = useLocation();
+  
+  // Get auth state and functions from context
+  const { login, isAuthenticated, isLoading, error } = useAuth();
+  
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      // Redirect to the page they tried to visit or dashboard
+      const from = location.state?.from || "/profile";
+      navigate(from, { replace: true });
+    }
+  }, [isAuthenticated, navigate, location]);
+  
+  // Handle form input changes
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({
@@ -20,36 +31,27 @@ const SignIn = () => {
       [name]: value,
     });
   };
-
+  
+  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-  
+    setFormError("");
+    
     const { email, password } = formData;
-  
+    
+    if (!email || !password) {
+      setFormError("Please fill in all fields");
+      return;
+    }
+    
     try {
-      const response = await fetch("http://localhost:8000/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      });
-  
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Login failed");
-      }
-  
-      const data = await response.json();
-      dispatch(setUser(data)); 
-      navigate("/profile");
+      await login({ email, password });
+      // No need to navigate here as the useEffect will handle that
     } catch (err) {
-      setError(err.message);
+      setFormError(err.message || "Login failed. Please check your credentials.");
     }
   };
   
-
   return (
     <Container
       className="d-flex justify-content-center align-items-center"
@@ -60,8 +62,14 @@ const SignIn = () => {
         onSubmit={handleSubmit}
       >
         <h3 className="text-center mb-4">Sign In</h3>
-        {error && <p className="text-danger text-center">{error}</p>}
-
+        
+        {/* Show API errors */}
+        {(error || formError) && (
+          <Alert variant="danger" className="text-center">
+            {formError || error}
+          </Alert>
+        )}
+        
         <Form.Group className="mb-3" controlId="formBasicEmail">
           <Form.Label>Email address</Form.Label>
           <Form.Control
@@ -71,9 +79,10 @@ const SignIn = () => {
             onChange={handleChange}
             placeholder="Enter email"
             required
+            disabled={isLoading}
           />
         </Form.Group>
-
+        
         <Form.Group className="mb-3" controlId="formBasicPassword">
           <Form.Label>Password</Form.Label>
           <Form.Control
@@ -83,15 +92,35 @@ const SignIn = () => {
             onChange={handleChange}
             placeholder="Password"
             required
+            disabled={isLoading}
           />
         </Form.Group>
-
-        <Button variant="primary" type="submit" className="w-100 mb-3">
-          Sign In
+        
+        <Button 
+          variant="primary" 
+          type="submit" 
+          className="w-100 mb-3"
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <>
+              <Spinner
+                as="span"
+                animation="border"
+                size="sm"
+                role="status"
+                aria-hidden="true"
+                className="me-2"
+              />
+              Signing In...
+            </>
+          ) : (
+            "Sign In"
+          )}
         </Button>
-
+        
         <OAuth />
-
+        
         <p className="text-center">
           Don't have an account?{" "}
           <Link to="/sign-up" style={{ textDecoration: "none" }}>
